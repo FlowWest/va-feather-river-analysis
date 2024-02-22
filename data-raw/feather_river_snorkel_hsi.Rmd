@@ -1,0 +1,134 @@
+---
+title: "Feather River - HSI exploration"
+author: "Maddee Rubenson (FlowWest)"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+
+knitr::opts_chunk$set(echo = TRUE)
+
+theme_set(theme_minimal())
+
+```
+
+```{r}
+
+# https://github.com/SRJPE/JPE-datasets/blob/main/data-raw/qc-markdowns/seine-snorkel-data/feather-river/feather_snorkel_qc.Rmd
+cleaner_snorkel_data <- readRDS('cleaner_snorkel_data.RDS') |> 
+  glimpse()
+
+```
+
+```{r}
+
+snorkel_data_dev <- cleaner_snorkel_data |> 
+  select(section_name, date, fish_count = count, substrate, instream_cover, overhead_cover) |> #size_class, est_size
+  filter(!is.na(fish_count) & !is.na(instream_cover)) |> 
+  mutate(substrate_unique = strsplit(substrate, ""),
+         instream_cover_unique = strsplit(instream_cover, ""),
+         overhead_cover_unique = strsplit(overhead_cover, "")) |> 
+  unnest(substrate_unique) |> 
+  unnest(instream_cover_unique) |> 
+  unnest(overhead_cover_unique) 
+```
+
+```{r}
+snorkel_data_dev |> 
+  ggplot() +
+  geom_jitter(aes(y = fish_count, x = substrate_unique))
+
+snorkel_data_dev |> 
+  ggplot() +
+  geom_jitter(aes(y = fish_count, x = instream_cover_unique))
+
+snorkel_data_dev |> 
+  ggplot() +
+  geom_jitter(aes(y = fish_count, x = overhead_cover_unique))
+```
+
+### Variable: `substrate`
+
+| SubstrateCode | Substrate                    | Proposed Weight |
+|---------------|------------------------------|-----------------|
+| 1             | Organic Fines, Mud (0.05 mm) | 1               |
+| 2             | Sand (0.05 to 2 mm)          | 1               |
+| 3             | Small Gravel (2 to 50 mm)    | 2               |
+| 4             | Large Gravel (50 to 150 mm)  | 5               |
+| 5             | Cobble (150 to 300 mm)       | 5               |
+| 6             | Boulder (\> 300 mm)          | 2               |
+| 0             | ?                            | 0               |
+
+### Variable: `instream_cover`
+
+|  CoverCode |  Cover                                           | Proposed Weight |
+|------------|--------------------------------------------------|-----------------|
+| A          | No apparent cover                                | 0               |
+| B          | Small instream objects/small-medium woody debris | 2               |
+| C          | Large instream objects/large woody debris        | 4               |
+| D          | Overhead objects                                 | 4               |
+| E          | Submerged aquatic veg/filamentous algae          | 0               |
+| F          | Undercut bank                                    | 0               |
+
+### Variable: `overhead_cover`
+
+| CoverCode  |  Cover                                        | Proposed Weight |
+|------------|-----------------------------------------------|-----------------|
+| 0          | No Apparent Cover                             | 0               |
+| 1          | Overhanging veg/obj (\< 0.5 m above surface)  | 2               |
+| 2          | Overhanging veg/obj (0.5 to 2 m above surface | 4               |
+| 3          | Surface turbulence, bubble curtain            | 2               |
+
+### Apply weights to variables and develop HSI
+```{r}
+substrate_scoring <- c('1' = 1,'2' = 1,'3' = 2, '4' = 5,'5' = 5, '6' = 2,'0' = 0)
+instream_cover_scoring <- c('A' = 0, "B" = 2, "C" = 4, "D" = 4, "E" = 0, "F" = 0)
+overhead_cover_scoring <- c('0' = 0, '1' = 2,'2' = 4,'3' = 2)
+
+# Define weights for vegetation and substrate
+instream_cover_weight <- 0.6
+overhead_cover_weight <- 0.3 
+substrate_weight <- 0.4
+
+hsi_dev <- snorkel_data_dev |> 
+  mutate(normalized_fish_count = fish_count/max(fish_count)) |> 
+  mutate(
+    instream_cover_score = instream_cover_scoring[instream_cover_unique],
+    substrate_score = substrate_scoring[substrate_unique],
+    overhead_cover_score = overhead_cover_scoring[overhead_cover_unique],
+    hsi = as.numeric((instream_cover_score * instream_cover_weight +
+             overhead_cover_score * overhead_cover_weight + 
+           substrate_score * substrate_weight) * normalized_fish_count
+    )) |> 
+  mutate(normalized_hsi = hsi/max(hsi, na.rm = TRUE)) |> 
+  glimpse()
+
+```
+
+
+```{r}
+hsi_dev |> 
+  ggplot() +
+  geom_jitter(aes(y = normalized_hsi, x = substrate_unique, color = fish_count))
+
+hsi_dev |> 
+  ggplot() +
+  geom_jitter(aes(y = normalized_hsi, x = instream_cover_unique, color = fish_count))
+
+hsi_dev |> 
+  ggplot() +
+  geom_jitter(aes(y = normalized_hsi, x = overhead_cover_unique, color = fish_count))
+
+
+hsi_dev |> 
+  ggplot() +
+  geom_histogram(aes(x = normalized_hsi))
+
+hsi_dev |> 
+  ggplot() +
+  geom_point(aes(x = fish_count, y = normalized_hsi, color = instream_cover_unique))
+
+
+```
