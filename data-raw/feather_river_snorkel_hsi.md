@@ -1,48 +1,123 @@
 Feather River - HSI exploration
 ================
 Maddee Rubenson (FlowWest)
-2024-02-22
+2024-02-23
+
+### Questions/Notes
+
+- explanation for high fish counts, how are these counted?
+- habitat types are not mutually exclusive, does it make sense to assign
+  weights to types?
+- fish use by habitat type or hsi?
+- how complete is each year of data? by section? by water year?
+- how many times are they surveying each location in a given year?
+- unique hsi developed for high and low flow channels?
+- is there more data? froroville (1999-2003) - FR S and S Oroville.MDB
+  (ashley slacked to me)
+
+### TODO:
+
+- look into how CVPIA habitat docs defined the substrate HSI
+  <https://s3-us-west-2.amazonaws.com/cvpiahabitat-r-package/cvpia-sit-model-inputs/Feather_FERC_IFIM_Phase_2.pdf>
+- continue lit review of HSI methods
 
 ``` r
 # https://github.com/SRJPE/JPE-datasets/blob/main/data-raw/qc-markdowns/seine-snorkel-data/feather-river/feather_snorkel_qc.Rmd
 cleaner_snorkel_data <- readRDS('cleaner_snorkel_data.RDS') |> 
+  rename(fish_count = count) |> 
+  filter(!is.na(fish_count) & !is.na(instream_cover)) |> 
+  mutate(section_name = case_when(section_name == "Eye" ~ "Eye Riffle",
+                                  section_name == "Vance West" ~ "Vance Riffle",
+                                  section_name %in% c("Hatchery Side Ditch") ~ "Hatchery Ditch",
+                                  section_name == "Hatchery Side Channel" ~ "Hatchery Riffle", # TODO: check this one
+                                  section_name == "Gridley Side Channel" ~ "Gridley Riffle", # TODO: check this one
+                                  section_name %in% c("Robinson", "Lower Robinson") ~ "Robinson Riffle",
+                                  section_name == "Goose" ~ "Goose Riffle", 
+                                  section_name == "Auditorium" ~ "Auditorium Riffle",
+                                  section_name %in% c("Matthews", "Mathews", "Mathews Riffle") ~ "Matthews Riffle",
+                                  section_name %in% c("G95 Side Channel", "G95 West Side Channel", "G95 Side West", "G95 Side") ~ "G95", 
+                                  section_name %in% c("Vance West Riffle", "Vance W Riffle", "Vance East") ~ "Vance Riffle",
+                                  section_name == "Moes" ~ "Mo's Ditch",
+                                  section_name == "Aleck" ~ "Aleck Riffle",
+                                  section_name == "Lower Mcfarland" ~ "McFarland",
+                                  section_name %in% c("Bed Rock Riffle", "Bedrock") ~ "Bedrock Riffle",
+                                  section_name == "Steep" ~ "Steep Riffle",
+                                  section_name == "Keister" ~ "Kiester Riffle",
+                                  section_name == "Junkyard" ~ "Junkyard Riffle",
+                                  section_name == "Gateway" ~ "Gateway Riffle",
+                                  section_name %in% c("Hatchery Ditch And Moes", "Hatchery Ditch Moes Ditch", 
+                                                      "Hatchery Side Channel Moes Ditch", 
+                                                      "Hatchery Ditch And Moes Ditch", 
+                                                      "Hatchery Side Channel And Moes Ditch", 
+                                                      "Hatchery Ditch Moes") ~ "Hatchery Ditch and Mo's Ditch", # TODO: check this one since they are separate in the map
+                                  section_name %in% c("Hatchery And Moes Side Channels", "Hatchery Side Ch Moes Side Ch", 
+                                                      "Hatchery Side Channel And Moes") ~ "Hatchery and Mo's Riffles", # TODO: check on this one 
+                                  .default = as.character(section_name))) |> 
   glimpse()
 ```
 
-    ## Rows: 2,753
+    ## Rows: 1,999
     ## Columns: 27
-    ## $ survey_id            <chr> "2", "2", "2", "2", "3", "3", "3", "3", "3", "3",…
-    ## $ date                 <date> 2007-06-27, 2007-06-27, 2007-06-27, 2007-06-27, …
-    ## $ flow                 <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ weather_code         <chr> NA, NA, NA, NA, "clear", "clear", "clear", "clear…
-    ## $ turbidity            <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ temperature          <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ time_of_temperature  <time> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-    ## $ start_time           <time>       NA,       NA,       NA,       NA, 10:00:00…
-    ## $ end_time             <time>       NA,       NA,       NA,       NA, 14:00:00…
-    ## $ section_name         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ units_covered        <chr> NA, NA, NA, NA, "26,33,30,31,31a,32,32a", "26,33,…
+    ## $ survey_id            <chr> "46", "48", "318", "318", "318", "318", "318", "3…
+    ## $ date                 <date> 2010-08-11, 2010-08-17, 2018-03-19, 2018-03-19, …
+    ## $ flow                 <dbl> 620, 620, 800, 800, 800, 800, 800, 800, 800, 800,…
+    ## $ weather_code         <chr> "sunny", "sunny", "clear", "clear", "clear", "cle…
+    ## $ turbidity            <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+    ## $ temperature          <dbl> 64.8, 65.2, 46.4, 46.4, 46.4, 46.4, 46.4, 46.4, 4…
+    ## $ time_of_temperature  <time>       NA,       NA, 13:00:00, 13:00:00, 13:00:00…
+    ## $ start_time           <time> 10:30:00, 11:00:00, 12:50:00, 12:50:00, 12:50:00…
+    ## $ end_time             <time>       NA, 14:00:00, 14:24:00, 14:24:00, 14:24:00…
+    ## $ section_name         <chr> NA, NA, "Hatchery Riffle", "Hatchery Riffle", "Ha…
+    ## $ units_covered        <chr> NA, NA, "33 26", "33 26", "33 26", "33 26", "33 2…
     ## $ survey_comments      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ observation_id       <chr> "79", "81", "84", "86", "96", "98", "99", "100", …
-    ## $ unit                 <chr> "169", "173", "185", "215B", "26", "33", "33", "3…
-    ## $ count                <dbl> 50, 4, 15, 7, 0, 3, 30, 1, NA, 15, NA, 70, 14, 24…
-    ## $ size_class           <chr> "III", "I", "III", "III", NA, "II", "III", NA, NA…
-    ## $ est_size             <dbl> NA, NA, NA, NA, NA, 50, 75, 100, NA, 100, NA, 75,…
-    ## $ substrate            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ instream_cover       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ overhead_cover       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ hydrology_code       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ water_depth_m        <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ lwd_number           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    ## $ observation_id       <chr> "1068", "1091", "6420", "6421", "6422", "6423", "…
+    ## $ unit                 <chr> "104", "185", "33", "33", "33", "33", "33", "33",…
+    ## $ fish_count           <dbl> 6, 1, 50, 50, 25, 50, 5, 10, 10, 40, 10, 1, 8, 5,…
+    ## $ size_class           <chr> "VI", "VI", NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
+    ## $ est_size             <dbl> 900, 600, 35, 40, 50, 45, 35, 40, 45, 50, 60, 70,…
+    ## $ substrate            <chr> "5", "5", "13", "13", "13", "13", "23", "23", "23…
+    ## $ instream_cover       <chr> "A", "A", "BDEF", "BDEF", "BDEF", "BDEF", "FE", "…
+    ## $ overhead_cover       <chr> "0", "0", "0", "0", "0", "0", "1", "1", "1", "1",…
+    ## $ hydrology_code       <chr> "Riffle", "Glide", "Glide Edgewater", "Glide Edge…
+    ## $ water_depth_m        <dbl> 1.0, 0.5, 0.4, 0.4, 0.4, 0.4, 0.3, 0.4, 0.4, 0.4,…
+    ## $ lwd_number           <chr> NA, NA, "0", "0", "0", "0", "0", "0", "0", "0", "…
     ## $ observation_comments <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
     ## $ run                  <chr> "unknown", "unknown", "unknown", "unknown", "unkn…
     ## $ tagged               <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
     ## $ clipped              <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
 
 ``` r
+high_flows <- c('Vance Riffle', 'G95', 'Kiester Riffle', 'Goose Riffle', 'Big Riffle', 'McFarland', 'Gridley Riffle', 'Junkyard Riffle')
+low_flows <- cleaner_snorkel_data |> filter(!(section_name %in% high_flows)) |> filter(!is.na(section_name)) |> pull(section_name) |> unique()
+
+high_flows
+```
+
+    ## [1] "Vance Riffle"    "G95"             "Kiester Riffle"  "Goose Riffle"   
+    ## [5] "Big Riffle"      "McFarland"       "Gridley Riffle"  "Junkyard Riffle"
+
+``` r
+low_flows
+```
+
+    ##  [1] "Hatchery Riffle"               "Mo's Ditch"                   
+    ##  [3] "Bedrock Riffle"                "Trailer Park"                 
+    ##  [5] "Aleck Riffle"                  "Steep Riffle"                 
+    ##  [7] "Eye Riffle"                    "Gateway Riffle"               
+    ##  [9] "Hatchery Ditch"                "Matthews Riffle"              
+    ## [11] "Robinson Riffle"               "Hatchery and Mo's Riffles"    
+    ## [13] "Auditorium Riffle"             "Bedrock Park"                 
+    ## [15] "Hatchery Ditch and Mo's Ditch" "Trailer Park Riffle"          
+    ## [17] "Keister Riffle"
+
+``` r
+cleaner_snorkel_data <- cleaner_snorkel_data |> 
+  mutate(channel_flow_type = ifelse(section_name %in% high_flows, "high flow channel", "low flow channel"))
+```
+
+``` r
 snorkel_data_dev <- cleaner_snorkel_data |> 
-  select(section_name, date, fish_count = count, substrate, instream_cover, overhead_cover) |> #size_class, est_size
-  filter(!is.na(fish_count) & !is.na(instream_cover)) |> 
+  select(section_name, date, fish_count, substrate, instream_cover, overhead_cover) |> #size_class, est_size|> 
   mutate(substrate_unique = strsplit(substrate, ""),
          instream_cover_unique = strsplit(instream_cover, ""),
          overhead_cover_unique = strsplit(overhead_cover, "")) |> 
@@ -50,30 +125,6 @@ snorkel_data_dev <- cleaner_snorkel_data |>
   unnest(instream_cover_unique) |> 
   unnest(overhead_cover_unique) 
 ```
-
-``` r
-snorkel_data_dev |> 
-  ggplot() +
-  geom_jitter(aes(y = fish_count, x = substrate_unique))
-```
-
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
-
-``` r
-snorkel_data_dev |> 
-  ggplot() +
-  geom_jitter(aes(y = fish_count, x = instream_cover_unique))
-```
-
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-3-2.png)<!-- -->
-
-``` r
-snorkel_data_dev |> 
-  ggplot() +
-  geom_jitter(aes(y = fish_count, x = overhead_cover_unique))
-```
-
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-3-3.png)<!-- -->
 
 ### Variable: `substrate`
 
@@ -107,6 +158,143 @@ snorkel_data_dev |>
 | 2         | Overhanging veg/obj (0.5 to 2 m above surface | 4               |
 | 3         | Surface turbulence, bubble curtain            | 2               |
 
+### Data Exploration
+
+#### fish count by habitat types
+
+``` r
+snorkel_data_dev |> 
+  ggplot() +
+  geom_jitter(aes(y = fish_count, x = substrate_unique))
+```
+
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
+
+``` r
+snorkel_data_dev |> 
+  ggplot() +
+  geom_jitter(aes(y = fish_count, x = instream_cover_unique))
+```
+
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-3-2.png)<!-- -->
+
+``` r
+snorkel_data_dev |> 
+  ggplot() +
+  geom_jitter(aes(y = fish_count, x = overhead_cover_unique))
+```
+
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-3-3.png)<!-- -->
+\#### Data Completeness
+
+By year, river section, water year
+
+``` r
+# by year
+cleaner_snorkel_data |> 
+  group_by(year(date)) |> 
+  summarise(n_fish_counts = length(fish_count)) |> 
+  knitr::kable(col.names = c('year', 'number of fish count obs.'))
+```
+
+| year | number of fish count obs. |
+|-----:|--------------------------:|
+| 2010 |                        27 |
+| 2011 |                       199 |
+| 2012 |                       338 |
+| 2013 |                        21 |
+| 2015 |                        50 |
+| 2016 |                       114 |
+| 2017 |                         1 |
+| 2018 |                       511 |
+| 2019 |                       218 |
+| 2020 |                       520 |
+
+``` r
+cleaner_snorkel_data |> 
+  group_by(year(date)) |> 
+  summarise(n_fish_counts = length(fish_count)) |> 
+  rename(year = `year(date)`) |> 
+  ggplot() + 
+  geom_col(aes(x = as.factor(year), y = n_fish_counts))
+```
+
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+
+``` r
+# by section
+cleaner_snorkel_data |> 
+  group_by(section_name) |> 
+  summarise(n_fish_counts = length(fish_count)) |> 
+  knitr::kable(col.names = c('section name', 'number of fish count obs.'))
+```
+
+| section name                  | number of fish count obs. |
+|:------------------------------|--------------------------:|
+| Aleck Riffle                  |                        51 |
+| Auditorium Riffle             |                        31 |
+| Bedrock Park                  |                        19 |
+| Bedrock Riffle                |                        70 |
+| Big Riffle                    |                        21 |
+| Eye Riffle                    |                       123 |
+| G95                           |                        42 |
+| Gateway Riffle                |                        80 |
+| Goose Riffle                  |                        16 |
+| Gridley Riffle                |                        18 |
+| Hatchery Ditch                |                       171 |
+| Hatchery Ditch and Mo’s Ditch |                        95 |
+| Hatchery Riffle               |                       149 |
+| Hatchery and Mo’s Riffles     |                        54 |
+| Junkyard Riffle               |                        16 |
+| Keister Riffle                |                         1 |
+| Kiester Riffle                |                         6 |
+| Matthews Riffle               |                        59 |
+| McFarland                     |                         9 |
+| Mo’s Ditch                    |                         9 |
+| Robinson Riffle               |                       108 |
+| Steep Riffle                  |                       168 |
+| Trailer Park                  |                        55 |
+| Trailer Park Riffle           |                         7 |
+| Vance Riffle                  |                        36 |
+| NA                            |                       585 |
+
+``` r
+cleaner_snorkel_data |> 
+  group_by(section_name) |> 
+  summarise(n_fish_counts = length(fish_count)) |> 
+  ggplot() + 
+  geom_col(aes(x = section_name, y = n_fish_counts)) +
+  coord_flip()
+```
+
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-4-2.png)<!-- -->
+
+``` r
+# by section
+cleaner_snorkel_data |> 
+  group_by(channel_flow_type) |> 
+  summarise(n_fish_counts = length(fish_count)) |> 
+  knitr::kable(col.names = c('channel flow type', 'number of fish count obs.'))
+```
+
+| channel flow type | number of fish count obs. |
+|:------------------|--------------------------:|
+| high flow channel |                       164 |
+| low flow channel  |                      1835 |
+
+``` r
+cleaner_snorkel_data |> 
+  group_by(channel_flow_type) |> 
+  summarise(n_fish_counts = length(fish_count)) |> 
+  ggplot() + 
+  geom_col(aes(x = channel_flow_type, y = n_fish_counts)) +
+  coord_flip()
+```
+
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-4-3.png)<!-- -->
+
+## HSI Development
+
 ### Apply weights to variables and develop HSI
 
 ``` r
@@ -135,7 +323,7 @@ hsi_dev <- snorkel_data_dev |>
 
     ## Rows: 7,509
     ## Columns: 15
-    ## $ section_name          <chr> NA, NA, "Hatchery Side Channel", "Hatchery Side …
+    ## $ section_name          <chr> NA, NA, "Hatchery Riffle", "Hatchery Riffle", "H…
     ## $ date                  <date> 2010-08-11, 2010-08-17, 2018-03-19, 2018-03-19,…
     ## $ fish_count            <dbl> 6, 1, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50…
     ## $ substrate             <chr> "5", "5", "13", "13", "13", "13", "13", "13", "1…
@@ -159,7 +347,7 @@ hsi_dev |>
 
     ## Warning: Removed 22 rows containing missing values (`geom_point()`).
 
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
 
 ``` r
 hsi_dev |> 
@@ -169,7 +357,7 @@ hsi_dev |>
 
     ## Warning: Removed 22 rows containing missing values (`geom_point()`).
 
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-5-2.png)<!-- -->
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-6-2.png)<!-- -->
 
 ``` r
 hsi_dev |> 
@@ -179,7 +367,7 @@ hsi_dev |>
 
     ## Warning: Removed 22 rows containing missing values (`geom_point()`).
 
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-5-3.png)<!-- -->
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-6-3.png)<!-- -->
 
 ``` r
 hsi_dev |> 
@@ -191,7 +379,7 @@ hsi_dev |>
 
     ## Warning: Removed 22 rows containing non-finite values (`stat_bin()`).
 
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-5-4.png)<!-- -->
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-6-4.png)<!-- -->
 
 ``` r
 hsi_dev |> 
@@ -201,4 +389,44 @@ hsi_dev |>
 
     ## Warning: Removed 22 rows containing missing values (`geom_point()`).
 
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-5-5.png)<!-- -->
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-6-5.png)<!-- -->
+
+``` r
+hsi_dev |>  
+  ggplot() +
+  geom_point(aes(x = fish_count, y = normalized_hsi)) +
+  facet_wrap(~section_name)
+```
+
+    ## Warning: Removed 22 rows containing missing values (`geom_point()`).
+
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-6-6.png)<!-- -->
+
+### Create a single HSI per fish count
+
+``` r
+hsi_grouped <- hsi_dev |> 
+  group_by(fish_count) |> 
+  summarise(hsi_val_mean = mean(normalized_hsi, na.rm = TRUE),
+            hsi_val_median = median(normalized_hsi, na.rm = TRUE))
+
+hsi_grouped |> 
+  ggplot() + 
+  geom_point(aes(x = fish_count, y = hsi_val_mean)) + 
+  geom_smooth(aes(x = fish_count, y = hsi_val_mean))
+```
+
+    ## `geom_smooth()` using method = 'loess' and formula = 'y ~ x'
+
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+
+``` r
+hsi_grouped |> 
+  ggplot() + 
+  geom_point(aes(x = fish_count, y = hsi_val_median)) + 
+  geom_smooth(aes(x = fish_count, y = hsi_val_median))
+```
+
+    ## `geom_smooth()` using method = 'loess' and formula = 'y ~ x'
+
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-2.png)<!-- -->

@@ -14,39 +14,76 @@ theme_set(theme_minimal())
 
 ```
 
+### Questions/Notes
+
+-   explanation for high fish counts, how are these counted?
+-   habitat types are not mutually exclusive, does it make sense to assign weights to types? 
+-   fish use by habitat type or hsi?
+-   how complete is each year of data? by section? by water year?
+-   how many times are they surveying each location in a given year?
+-   unique hsi developed for high and low flow channels?
+-   is there more data? froroville (1999-2003) - FR S and S Oroville.MDB (ashley slacked to me)
+
+### TODO:
+-   look into how CVPIA habitat docs defined the substrate HSI <https://s3-us-west-2.amazonaws.com/cvpiahabitat-r-package/cvpia-sit-model-inputs/Feather_FERC_IFIM_Phase_2.pdf>
+-   continue lit review of HSI methods 
+
+
 ```{r}
 
 # https://github.com/SRJPE/JPE-datasets/blob/main/data-raw/qc-markdowns/seine-snorkel-data/feather-river/feather_snorkel_qc.Rmd
 cleaner_snorkel_data <- readRDS('cleaner_snorkel_data.RDS') |> 
+  rename(fish_count = count) |> 
+  filter(!is.na(fish_count) & !is.na(instream_cover)) |> 
+  mutate(section_name = case_when(section_name == "Eye" ~ "Eye Riffle",
+                                  section_name == "Vance West" ~ "Vance Riffle",
+                                  section_name %in% c("Hatchery Side Ditch") ~ "Hatchery Ditch",
+                                  section_name == "Hatchery Side Channel" ~ "Hatchery Riffle", # TODO: check this one
+                                  section_name == "Gridley Side Channel" ~ "Gridley Riffle", # TODO: check this one
+                                  section_name %in% c("Robinson", "Lower Robinson") ~ "Robinson Riffle",
+                                  section_name == "Goose" ~ "Goose Riffle", 
+                                  section_name == "Auditorium" ~ "Auditorium Riffle",
+                                  section_name %in% c("Matthews", "Mathews", "Mathews Riffle") ~ "Matthews Riffle",
+                                  section_name %in% c("G95 Side Channel", "G95 West Side Channel", "G95 Side West", "G95 Side") ~ "G95", 
+                                  section_name %in% c("Vance West Riffle", "Vance W Riffle", "Vance East") ~ "Vance Riffle",
+                                  section_name == "Moes" ~ "Mo's Ditch",
+                                  section_name == "Aleck" ~ "Aleck Riffle",
+                                  section_name == "Lower Mcfarland" ~ "McFarland",
+                                  section_name %in% c("Bed Rock Riffle", "Bedrock") ~ "Bedrock Riffle",
+                                  section_name == "Steep" ~ "Steep Riffle",
+                                  section_name == "Keister" ~ "Kiester Riffle",
+                                  section_name == "Junkyard" ~ "Junkyard Riffle",
+                                  section_name == "Gateway" ~ "Gateway Riffle",
+                                  section_name %in% c("Hatchery Ditch And Moes", "Hatchery Ditch Moes Ditch", 
+                                                      "Hatchery Side Channel Moes Ditch", 
+                                                      "Hatchery Ditch And Moes Ditch", 
+                                                      "Hatchery Side Channel And Moes Ditch", 
+                                                      "Hatchery Ditch Moes") ~ "Hatchery Ditch and Mo's Ditch", # TODO: check this one since they are separate in the map
+                                  section_name %in% c("Hatchery And Moes Side Channels", "Hatchery Side Ch Moes Side Ch", 
+                                                      "Hatchery Side Channel And Moes") ~ "Hatchery and Mo's Riffles", # TODO: check on this one 
+                                  .default = as.character(section_name))) |> 
   glimpse()
+
+high_flows <- c('Vance Riffle', 'G95', 'Kiester Riffle', 'Goose Riffle', 'Big Riffle', 'McFarland', 'Gridley Riffle', 'Junkyard Riffle')
+low_flows <- cleaner_snorkel_data |> filter(!(section_name %in% high_flows)) |> filter(!is.na(section_name)) |> pull(section_name) |> unique()
+
+high_flows
+low_flows
+
+cleaner_snorkel_data <- cleaner_snorkel_data |> 
+  mutate(channel_flow_type = ifelse(section_name %in% high_flows, "high flow channel", "low flow channel"))
 
 ```
 
 ```{r}
-
 snorkel_data_dev <- cleaner_snorkel_data |> 
-  select(section_name, date, fish_count = count, substrate, instream_cover, overhead_cover) |> #size_class, est_size
-  filter(!is.na(fish_count) & !is.na(instream_cover)) |> 
+  select(section_name, date, fish_count, substrate, instream_cover, overhead_cover) |> #size_class, est_size|> 
   mutate(substrate_unique = strsplit(substrate, ""),
          instream_cover_unique = strsplit(instream_cover, ""),
          overhead_cover_unique = strsplit(overhead_cover, "")) |> 
   unnest(substrate_unique) |> 
   unnest(instream_cover_unique) |> 
   unnest(overhead_cover_unique) 
-```
-
-```{r}
-snorkel_data_dev |> 
-  ggplot() +
-  geom_jitter(aes(y = fish_count, x = substrate_unique))
-
-snorkel_data_dev |> 
-  ggplot() +
-  geom_jitter(aes(y = fish_count, x = instream_cover_unique))
-
-snorkel_data_dev |> 
-  ggplot() +
-  geom_jitter(aes(y = fish_count, x = overhead_cover_unique))
 ```
 
 ### Variable: `substrate`
@@ -63,25 +100,91 @@ snorkel_data_dev |>
 
 ### Variable: `instream_cover`
 
-|  CoverCode |  Cover                                           | Proposed Weight |
-|------------|--------------------------------------------------|-----------------|
-| A          | No apparent cover                                | 0               |
-| B          | Small instream objects/small-medium woody debris | 2               |
-| C          | Large instream objects/large woody debris        | 4               |
-| D          | Overhead objects                                 | 4               |
-| E          | Submerged aquatic veg/filamentous algae          | 0               |
-| F          | Undercut bank                                    | 0               |
+| CoverCode | Cover                                            | Proposed Weight |
+|---------------|------------------------------------------|---------------|
+| A         | No apparent cover                                | 0               |
+| B         | Small instream objects/small-medium woody debris | 2               |
+| C         | Large instream objects/large woody debris        | 4               |
+| D         | Overhead objects                                 | 4               |
+| E         | Submerged aquatic veg/filamentous algae          | 0               |
+| F         | Undercut bank                                    | 0               |
 
 ### Variable: `overhead_cover`
 
-| CoverCode  |  Cover                                        | Proposed Weight |
-|------------|-----------------------------------------------|-----------------|
-| 0          | No Apparent Cover                             | 0               |
-| 1          | Overhanging veg/obj (\< 0.5 m above surface)  | 2               |
-| 2          | Overhanging veg/obj (0.5 to 2 m above surface | 4               |
-| 3          | Surface turbulence, bubble curtain            | 2               |
+| CoverCode | Cover                                         | Proposed Weight |
+|----------------|-----------------------------------------|----------------|
+| 0         | No Apparent Cover                             | 0               |
+| 1         | Overhanging veg/obj (\< 0.5 m above surface)  | 2               |
+| 2         | Overhanging veg/obj (0.5 to 2 m above surface | 4               |
+| 3         | Surface turbulence, bubble curtain            | 2               |
+
+### Data Exploration
+
+#### fish count by habitat types
+
+```{r}
+snorkel_data_dev |> 
+  ggplot() +
+  geom_jitter(aes(y = fish_count, x = substrate_unique))
+
+snorkel_data_dev |> 
+  ggplot() +
+  geom_jitter(aes(y = fish_count, x = instream_cover_unique))
+
+snorkel_data_dev |> 
+  ggplot() +
+  geom_jitter(aes(y = fish_count, x = overhead_cover_unique))
+```
+#### Data Completeness
+
+By year, river section, water year 
+
+```{r}
+# by year
+cleaner_snorkel_data |> 
+  group_by(year(date)) |> 
+  summarise(n_fish_counts = length(fish_count)) |> 
+  knitr::kable(col.names = c('year', 'number of fish count obs.'))
+
+cleaner_snorkel_data |> 
+  group_by(year(date)) |> 
+  summarise(n_fish_counts = length(fish_count)) |> 
+  rename(year = `year(date)`) |> 
+  ggplot() + 
+  geom_col(aes(x = as.factor(year), y = n_fish_counts))
+
+# by section
+cleaner_snorkel_data |> 
+  group_by(section_name) |> 
+  summarise(n_fish_counts = length(fish_count)) |> 
+  knitr::kable(col.names = c('section name', 'number of fish count obs.'))
+
+cleaner_snorkel_data |> 
+  group_by(section_name) |> 
+  summarise(n_fish_counts = length(fish_count)) |> 
+  ggplot() + 
+  geom_col(aes(x = section_name, y = n_fish_counts)) +
+  coord_flip()
+
+# by section
+cleaner_snorkel_data |> 
+  group_by(channel_flow_type) |> 
+  summarise(n_fish_counts = length(fish_count)) |> 
+  knitr::kable(col.names = c('channel flow type', 'number of fish count obs.'))
+
+cleaner_snorkel_data |> 
+  group_by(channel_flow_type) |> 
+  summarise(n_fish_counts = length(fish_count)) |> 
+  ggplot() + 
+  geom_col(aes(x = channel_flow_type, y = n_fish_counts)) +
+  coord_flip()
+
+```
+
+## HSI Development
 
 ### Apply weights to variables and develop HSI
+
 ```{r}
 substrate_scoring <- c('1' = 1,'2' = 1,'3' = 2, '4' = 5,'5' = 5, '6' = 2,'0' = 0)
 instream_cover_scoring <- c('A' = 0, "B" = 2, "C" = 4, "D" = 4, "E" = 0, "F" = 0)
@@ -107,7 +210,6 @@ hsi_dev <- snorkel_data_dev |>
 
 ```
 
-
 ```{r}
 hsi_dev |> 
   ggplot() +
@@ -130,5 +232,29 @@ hsi_dev |>
   ggplot() +
   geom_point(aes(x = fish_count, y = normalized_hsi, color = instream_cover_unique))
 
+hsi_dev |>  
+  ggplot() +
+  geom_point(aes(x = fish_count, y = normalized_hsi)) +
+  facet_wrap(~section_name)
+```
+
+### Create a single HSI per fish count
+
+```{r}
+
+hsi_grouped <- hsi_dev |> 
+  group_by(fish_count) |> 
+  summarise(hsi_val_mean = mean(normalized_hsi, na.rm = TRUE),
+            hsi_val_median = median(normalized_hsi, na.rm = TRUE))
+
+hsi_grouped |> 
+  ggplot() + 
+  geom_point(aes(x = fish_count, y = hsi_val_mean)) + 
+  geom_smooth(aes(x = fish_count, y = hsi_val_mean))
+
+hsi_grouped |> 
+  ggplot() + 
+  geom_point(aes(x = fish_count, y = hsi_val_median)) + 
+  geom_smooth(aes(x = fish_count, y = hsi_val_median))
 
 ```
