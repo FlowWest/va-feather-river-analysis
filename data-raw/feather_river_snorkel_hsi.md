@@ -117,7 +117,7 @@ cleaner_snorkel_data <- cleaner_snorkel_data |>
 
 ``` r
 snorkel_data_dev <- cleaner_snorkel_data |> 
-  select(section_name, date, fish_count, substrate, instream_cover, overhead_cover) |> #size_class, est_size|> 
+  select(section_name, date, fish_count, substrate, instream_cover, overhead_cover, size_class, est_size) |> 
   mutate(substrate_unique = strsplit(substrate, ""),
          instream_cover_unique = strsplit(instream_cover, ""),
          overhead_cover_unique = strsplit(overhead_cover, "")) |> 
@@ -185,38 +185,40 @@ snorkel_data_dev |>
 ```
 
 ![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-3-3.png)<!-- -->
-\#### Data Completeness
+
+#### Data Completeness
 
 By year, river section, water year
 
 ``` r
 # by year
 cleaner_snorkel_data |> 
-  group_by(year(date)) |> 
-  summarise(n_fish_counts = length(fish_count)) |> 
-  knitr::kable(col.names = c('year', 'number of fish count obs.'))
+  mutate(year = year(date)) |>
+  group_by(year) |> 
+  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
+  knitr::kable(col.names = c('year', 'total fish counted'))
 ```
 
-| year | number of fish count obs. |
-|-----:|--------------------------:|
-| 2010 |                        27 |
-| 2011 |                       199 |
-| 2012 |                       338 |
-| 2013 |                        21 |
-| 2015 |                        50 |
-| 2016 |                       114 |
-| 2017 |                         1 |
-| 2018 |                       511 |
-| 2019 |                       218 |
-| 2020 |                       520 |
+| year | total fish counted |
+|-----:|-------------------:|
+| 2010 |                166 |
+| 2011 |               4248 |
+| 2012 |               6045 |
+| 2013 |                175 |
+| 2015 |                116 |
+| 2016 |               2087 |
+| 2017 |                  1 |
+| 2018 |              65954 |
+| 2019 |               7747 |
+| 2020 |             535668 |
 
 ``` r
 cleaner_snorkel_data |> 
   group_by(year(date)) |> 
-  summarise(n_fish_counts = length(fish_count)) |> 
+  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
   rename(year = `year(date)`) |> 
   ggplot() + 
-  geom_col(aes(x = as.factor(year), y = n_fish_counts))
+  geom_col(aes(x = as.factor(year), y = total_fish_counts))
 ```
 
 ![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
@@ -225,45 +227,45 @@ cleaner_snorkel_data |>
 # by section
 cleaner_snorkel_data |> 
   group_by(section_name) |> 
-  summarise(n_fish_counts = length(fish_count)) |> 
-  knitr::kable(col.names = c('section name', 'number of fish count obs.'))
+  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
+  knitr::kable(col.names = c('section name', 'total fish counted'))
 ```
 
-| section name                  | number of fish count obs. |
-|:------------------------------|--------------------------:|
-| Aleck Riffle                  |                        51 |
-| Auditorium Riffle             |                        31 |
-| Bedrock Park                  |                        19 |
-| Bedrock Riffle                |                        70 |
-| Big Riffle                    |                        21 |
-| Eye Riffle                    |                       123 |
-| G95                           |                        42 |
-| Gateway Riffle                |                        80 |
-| Goose Riffle                  |                        16 |
-| Gridley Riffle                |                        18 |
-| Hatchery Ditch                |                       171 |
-| Hatchery Ditch and Mo’s Ditch |                        95 |
-| Hatchery Riffle               |                       149 |
-| Hatchery and Mo’s Riffles     |                        54 |
-| Junkyard Riffle               |                        16 |
-| Keister Riffle                |                         1 |
-| Kiester Riffle                |                         6 |
-| Matthews Riffle               |                        59 |
-| McFarland                     |                         9 |
-| Mo’s Ditch                    |                         9 |
-| Robinson Riffle               |                       108 |
-| Steep Riffle                  |                       168 |
-| Trailer Park                  |                        55 |
-| Trailer Park Riffle           |                         7 |
-| Vance Riffle                  |                        36 |
-| NA                            |                       585 |
+| section name                  | total fish counted |
+|:------------------------------|-------------------:|
+| Aleck Riffle                  |              27650 |
+| Auditorium Riffle             |              32800 |
+| Bedrock Park                  |               1130 |
+| Bedrock Riffle                |              63420 |
+| Big Riffle                    |                816 |
+| Eye Riffle                    |              24662 |
+| G95                           |               8391 |
+| Gateway Riffle                |              11966 |
+| Goose Riffle                  |               3913 |
+| Gridley Riffle                |                618 |
+| Hatchery Ditch                |              28177 |
+| Hatchery Ditch and Mo’s Ditch |              83928 |
+| Hatchery Riffle               |              21144 |
+| Hatchery and Mo’s Riffles     |               1708 |
+| Junkyard Riffle               |                455 |
+| Keister Riffle                |                  1 |
+| Kiester Riffle                |                250 |
+| Matthews Riffle               |              46169 |
+| McFarland                     |                973 |
+| Mo’s Ditch                    |                537 |
+| Robinson Riffle               |              59692 |
+| Steep Riffle                  |              89984 |
+| Trailer Park                  |              96505 |
+| Trailer Park Riffle           |                 13 |
+| Vance Riffle                  |               6671 |
+| NA                            |              10634 |
 
 ``` r
 cleaner_snorkel_data |> 
   group_by(section_name) |> 
-  summarise(n_fish_counts = length(fish_count)) |> 
+  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
   ggplot() + 
-  geom_col(aes(x = section_name, y = n_fish_counts)) +
+  geom_col(aes(x = section_name, y = total_fish_counts)) +
   coord_flip()
 ```
 
@@ -273,25 +275,58 @@ cleaner_snorkel_data |>
 # by section
 cleaner_snorkel_data |> 
   group_by(channel_flow_type) |> 
-  summarise(n_fish_counts = length(fish_count)) |> 
-  knitr::kable(col.names = c('channel flow type', 'number of fish count obs.'))
+  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
+  knitr::kable(col.names = c('channel flow type', 'total fish counted'))
 ```
 
-| channel flow type | number of fish count obs. |
-|:------------------|--------------------------:|
-| high flow channel |                       164 |
-| low flow channel  |                      1835 |
+| channel flow type | total fish counted |
+|:------------------|-------------------:|
+| high flow channel |              22087 |
+| low flow channel  |             600120 |
 
 ``` r
 cleaner_snorkel_data |> 
   group_by(channel_flow_type) |> 
-  summarise(n_fish_counts = length(fish_count)) |> 
+  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
   ggplot() + 
-  geom_col(aes(x = channel_flow_type, y = n_fish_counts)) +
+  geom_col(aes(x = channel_flow_type, y = total_fish_counts)) +
   coord_flip()
 ```
 
 ![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-4-3.png)<!-- -->
+
+#### Fish size
+
+##### Notes
+
+- size class is mostly `NA`s
+- we do not know what the units are for `est_size` nor what it is
+  describing
+
+| Size Class | Size Range |
+|------------|------------|
+| I          | 0-50       |
+| II         | 51-75      |
+| III        | 76-100     |
+| IV         | 101-150    |
+| V          | 151-300    |
+| VI         | 301-499    |
+| VII        | 500+       |
+
+``` r
+table(cleaner_snorkel_data$size_class, useNA = "always")
+```
+
+    ## 
+    ##    I   II  III   IV    V   VI  VII <NA> 
+    ##  177  202  121   41   10   46   55 1347
+
+``` r
+summary(cleaner_snorkel_data$est_size)
+```
+
+    ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+    ##    30.0    45.0    60.0   126.3    85.0   950.0       2
 
 ## HSI Development
 
@@ -322,13 +357,15 @@ hsi_dev <- snorkel_data_dev |>
 ```
 
     ## Rows: 7,509
-    ## Columns: 15
+    ## Columns: 17
     ## $ section_name          <chr> NA, NA, "Hatchery Riffle", "Hatchery Riffle", "H…
     ## $ date                  <date> 2010-08-11, 2010-08-17, 2018-03-19, 2018-03-19,…
     ## $ fish_count            <dbl> 6, 1, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50…
     ## $ substrate             <chr> "5", "5", "13", "13", "13", "13", "13", "13", "1…
     ## $ instream_cover        <chr> "A", "A", "BDEF", "BDEF", "BDEF", "BDEF", "BDEF"…
     ## $ overhead_cover        <chr> "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"…
+    ## $ size_class            <chr> "VI", "VI", NA, NA, NA, NA, NA, NA, NA, NA, NA, …
+    ## $ est_size              <dbl> 900, 600, 35, 35, 35, 35, 35, 35, 35, 35, 40, 40…
     ## $ substrate_unique      <chr> "5", "5", "1", "1", "1", "1", "3", "3", "3", "3"…
     ## $ instream_cover_unique <chr> "A", "A", "B", "D", "E", "F", "B", "D", "E", "F"…
     ## $ overhead_cover_unique <chr> "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"…
@@ -347,7 +384,7 @@ hsi_dev |>
 
     ## Warning: Removed 22 rows containing missing values (`geom_point()`).
 
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
 ``` r
 hsi_dev |> 
@@ -357,7 +394,7 @@ hsi_dev |>
 
     ## Warning: Removed 22 rows containing missing values (`geom_point()`).
 
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-6-2.png)<!-- -->
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-2.png)<!-- -->
 
 ``` r
 hsi_dev |> 
@@ -367,7 +404,7 @@ hsi_dev |>
 
     ## Warning: Removed 22 rows containing missing values (`geom_point()`).
 
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-6-3.png)<!-- -->
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-3.png)<!-- -->
 
 ``` r
 hsi_dev |> 
@@ -379,7 +416,7 @@ hsi_dev |>
 
     ## Warning: Removed 22 rows containing non-finite values (`stat_bin()`).
 
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-6-4.png)<!-- -->
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-4.png)<!-- -->
 
 ``` r
 hsi_dev |> 
@@ -389,7 +426,7 @@ hsi_dev |>
 
     ## Warning: Removed 22 rows containing missing values (`geom_point()`).
 
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-6-5.png)<!-- -->
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-5.png)<!-- -->
 
 ``` r
 hsi_dev |>  
@@ -400,7 +437,7 @@ hsi_dev |>
 
     ## Warning: Removed 22 rows containing missing values (`geom_point()`).
 
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-6-6.png)<!-- -->
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-6.png)<!-- -->
 
 ### Create a single HSI per fish count
 
@@ -418,7 +455,7 @@ hsi_grouped |>
 
     ## `geom_smooth()` using method = 'loess' and formula = 'y ~ x'
 
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
 
 ``` r
 hsi_grouped |> 
@@ -429,4 +466,4 @@ hsi_grouped |>
 
     ## `geom_smooth()` using method = 'loess' and formula = 'y ~ x'
 
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-2.png)<!-- -->
+![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-8-2.png)<!-- -->

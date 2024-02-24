@@ -17,7 +17,7 @@ theme_set(theme_minimal())
 ### Questions/Notes
 
 -   explanation for high fish counts, how are these counted?
--   habitat types are not mutually exclusive, does it make sense to assign weights to types? 
+-   habitat types are not mutually exclusive, does it make sense to assign weights to types?
 -   fish use by habitat type or hsi?
 -   how complete is each year of data? by section? by water year?
 -   how many times are they surveying each location in a given year?
@@ -25,9 +25,9 @@ theme_set(theme_minimal())
 -   is there more data? froroville (1999-2003) - FR S and S Oroville.MDB (ashley slacked to me)
 
 ### TODO:
--   look into how CVPIA habitat docs defined the substrate HSI <https://s3-us-west-2.amazonaws.com/cvpiahabitat-r-package/cvpia-sit-model-inputs/Feather_FERC_IFIM_Phase_2.pdf>
--   continue lit review of HSI methods 
 
+-   look into how CVPIA habitat docs defined the substrate HSI <https://s3-us-west-2.amazonaws.com/cvpiahabitat-r-package/cvpia-sit-model-inputs/Feather_FERC_IFIM_Phase_2.pdf>
+-   continue lit review of HSI methods
 
 ```{r}
 
@@ -77,7 +77,7 @@ cleaner_snorkel_data <- cleaner_snorkel_data |>
 
 ```{r}
 snorkel_data_dev <- cleaner_snorkel_data |> 
-  select(section_name, date, fish_count, substrate, instream_cover, overhead_cover) |> #size_class, est_size|> 
+  select(section_name, date, fish_count, substrate, instream_cover, overhead_cover, size_class, est_size) |> 
   mutate(substrate_unique = strsplit(substrate, ""),
          instream_cover_unique = strsplit(instream_cover, ""),
          overhead_cover_unique = strsplit(overhead_cover, "")) |> 
@@ -101,7 +101,7 @@ snorkel_data_dev <- cleaner_snorkel_data |>
 ### Variable: `instream_cover`
 
 | CoverCode | Cover                                            | Proposed Weight |
-|---------------|------------------------------------------|---------------|
+|-----------------|---------------------------------------|-----------------|
 | A         | No apparent cover                                | 0               |
 | B         | Small instream objects/small-medium woody debris | 2               |
 | C         | Large instream objects/large woody debris        | 4               |
@@ -112,7 +112,7 @@ snorkel_data_dev <- cleaner_snorkel_data |>
 ### Variable: `overhead_cover`
 
 | CoverCode | Cover                                         | Proposed Weight |
-|----------------|-----------------------------------------|----------------|
+|-----------------|--------------------------------------|-----------------|
 | 0         | No Apparent Cover                             | 0               |
 | 1         | Overhanging veg/obj (\< 0.5 m above surface)  | 2               |
 | 2         | Overhanging veg/obj (0.5 to 2 m above surface | 4               |
@@ -135,49 +135,76 @@ snorkel_data_dev |>
   ggplot() +
   geom_jitter(aes(y = fish_count, x = overhead_cover_unique))
 ```
+
 #### Data Completeness
 
-By year, river section, water year 
+By year, river section, water year
 
 ```{r}
 # by year
 cleaner_snorkel_data |> 
-  group_by(year(date)) |> 
-  summarise(n_fish_counts = length(fish_count)) |> 
-  knitr::kable(col.names = c('year', 'number of fish count obs.'))
+  mutate(year = year(date)) |>
+  group_by(year) |> 
+  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
+  knitr::kable(col.names = c('year', 'total fish counted'))
 
 cleaner_snorkel_data |> 
   group_by(year(date)) |> 
-  summarise(n_fish_counts = length(fish_count)) |> 
+  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
   rename(year = `year(date)`) |> 
   ggplot() + 
-  geom_col(aes(x = as.factor(year), y = n_fish_counts))
+  geom_col(aes(x = as.factor(year), y = total_fish_counts))
 
 # by section
 cleaner_snorkel_data |> 
   group_by(section_name) |> 
-  summarise(n_fish_counts = length(fish_count)) |> 
-  knitr::kable(col.names = c('section name', 'number of fish count obs.'))
+  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
+  knitr::kable(col.names = c('section name', 'total fish counted'))
 
 cleaner_snorkel_data |> 
   group_by(section_name) |> 
-  summarise(n_fish_counts = length(fish_count)) |> 
+  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
   ggplot() + 
-  geom_col(aes(x = section_name, y = n_fish_counts)) +
+  geom_col(aes(x = section_name, y = total_fish_counts)) +
   coord_flip()
 
 # by section
 cleaner_snorkel_data |> 
   group_by(channel_flow_type) |> 
-  summarise(n_fish_counts = length(fish_count)) |> 
-  knitr::kable(col.names = c('channel flow type', 'number of fish count obs.'))
+  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
+  knitr::kable(col.names = c('channel flow type', 'total fish counted'))
 
 cleaner_snorkel_data |> 
   group_by(channel_flow_type) |> 
-  summarise(n_fish_counts = length(fish_count)) |> 
+  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
   ggplot() + 
-  geom_col(aes(x = channel_flow_type, y = n_fish_counts)) +
+  geom_col(aes(x = channel_flow_type, y = total_fish_counts)) +
   coord_flip()
+
+```
+
+#### Fish size
+
+##### Notes
+
+-   size class is mostly `NA`s
+-   we do not know what the units are for `est_size` nor what it is describing
+
+| Size Class | Size Range |
+|------------|------------|
+| I          | 0-50       |
+| II         | 51-75      |
+| III        | 76-100     |
+| IV         | 101-150    |
+| V          | 151-300    |
+| VI         | 301-499    |
+| VII        | 500+       |
+
+```{r}
+table(cleaner_snorkel_data$size_class, useNA = "always")
+summary(cleaner_snorkel_data$est_size)
+
+
 
 ```
 
