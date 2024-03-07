@@ -1,16 +1,13 @@
 Feather River - HSI exploration
 ================
 Maddee Rubenson (FlowWest)
-2024-02-23
+2024-03-07
 
 ### Questions/Notes
 
 - explanation for high fish counts, how are these counted?
 - habitat types are not mutually exclusive, does it make sense to assign
   weights to types?
-- fish use by habitat type or hsi?
-- how complete is each year of data? by section? by water year?
-- how many times are they surveying each location in a given year?
 - unique hsi developed for high and low flow channels?
 - is there more data? froroville (1999-2003) - FR S and S Oroville.MDB
   (ashley slacked to me)
@@ -20,6 +17,11 @@ Maddee Rubenson (FlowWest)
 - look into how CVPIA habitat docs defined the substrate HSI
   <https://s3-us-west-2.amazonaws.com/cvpiahabitat-r-package/cvpia-sit-model-inputs/Feather_FERC_IFIM_Phase_2.pdf>
 - continue lit review of HSI methods
+
+### Limitations:
+
+- DWR HSC does not include Cover and is outdated
+  <https://s3-us-west-2.amazonaws.com/cvpiahabitat-r-package/cvpia-sit-model-inputs/Feather_FERC_IFIM_Phase_2.pdf>
 
 ``` r
 # https://github.com/SRJPE/JPE-datasets/blob/main/data-raw/qc-markdowns/seine-snorkel-data/feather-river/feather_snorkel_qc.Rmd
@@ -40,11 +42,12 @@ cleaner_snorkel_data <- readRDS('cleaner_snorkel_data.RDS') |>
                                   section_name == "Moes" ~ "Mo's Ditch",
                                   section_name == "Aleck" ~ "Aleck Riffle",
                                   section_name == "Lower Mcfarland" ~ "McFarland",
-                                  section_name %in% c("Bed Rock Riffle", "Bedrock") ~ "Bedrock Riffle",
+                                  section_name %in% c("Bed Rock Riffle", "Bedrock", "Bedrock Park") ~ "Bedrock Park Riffle",
                                   section_name == "Steep" ~ "Steep Riffle",
-                                  section_name == "Keister" ~ "Kiester Riffle",
+                                  section_name %in% c("Keister", "Keister Riffle") ~ "Kiester Riffle",
                                   section_name == "Junkyard" ~ "Junkyard Riffle",
                                   section_name == "Gateway" ~ "Gateway Riffle",
+                                  section_name == "Trailer Park" ~ "Trailer Park Riffle",
                                   section_name %in% c("Hatchery Ditch And Moes", "Hatchery Ditch Moes Ditch", 
                                                       "Hatchery Side Channel Moes Ditch", 
                                                       "Hatchery Ditch And Moes Ditch", 
@@ -101,14 +104,13 @@ low_flows
 ```
 
     ##  [1] "Hatchery Riffle"               "Mo's Ditch"                   
-    ##  [3] "Bedrock Riffle"                "Trailer Park"                 
+    ##  [3] "Bedrock Riffle"                "Trailer Park Riffle"          
     ##  [5] "Aleck Riffle"                  "Steep Riffle"                 
-    ##  [7] "Eye Riffle"                    "Gateway Riffle"               
-    ##  [9] "Hatchery Ditch"                "Matthews Riffle"              
-    ## [11] "Robinson Riffle"               "Hatchery and Mo's Riffles"    
-    ## [13] "Auditorium Riffle"             "Bedrock Park"                 
-    ## [15] "Hatchery Ditch and Mo's Ditch" "Trailer Park Riffle"          
-    ## [17] "Keister Riffle"
+    ##  [7] "Eye Riffle"                    "Bedrock Park Riffle"          
+    ##  [9] "Gateway Riffle"                "Hatchery Ditch"               
+    ## [11] "Matthews Riffle"               "Robinson Riffle"              
+    ## [13] "Hatchery and Mo's Riffles"     "Auditorium Riffle"            
+    ## [15] "Hatchery Ditch and Mo's Ditch"
 
 ``` r
 cleaner_snorkel_data <- cleaner_snorkel_data |> 
@@ -188,37 +190,39 @@ snorkel_data_dev |>
 
 #### Data Completeness
 
-By year, river section, water year
+Summarizes how complete the fish count data is by `year`, `section` and
+`flow type`.
 
 ``` r
 # by year
 cleaner_snorkel_data |> 
   mutate(year = year(date)) |>
   group_by(year) |> 
-  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
-  knitr::kable(col.names = c('year', 'total fish counted'))
+  summarise(total_fish_obs = length(fish_count))|> 
+  knitr::kable(col.names = c('year', 'total fish observations'))
 ```
 
-| year | total fish counted |
-|-----:|-------------------:|
-| 2010 |                166 |
-| 2011 |               4248 |
-| 2012 |               6045 |
-| 2013 |                175 |
-| 2015 |                116 |
-| 2016 |               2087 |
-| 2017 |                  1 |
-| 2018 |              65954 |
-| 2019 |               7747 |
-| 2020 |             535668 |
+| year | total fish observations |
+|-----:|------------------------:|
+| 2010 |                      27 |
+| 2011 |                     199 |
+| 2012 |                     338 |
+| 2013 |                      21 |
+| 2015 |                      50 |
+| 2016 |                     114 |
+| 2017 |                       1 |
+| 2018 |                     511 |
+| 2019 |                     218 |
+| 2020 |                     520 |
 
 ``` r
 cleaner_snorkel_data |> 
   group_by(year(date)) |> 
-  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
+  summarise(total_fish_obs = length(fish_count)) |> 
   rename(year = `year(date)`) |> 
   ggplot() + 
-  geom_col(aes(x = as.factor(year), y = total_fish_counts))
+  geom_col(aes(x = as.factor(year), y = total_fish_obs)) +
+  xlab("year") + ylab("total fish count observations")
 ```
 
 ![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
@@ -227,45 +231,44 @@ cleaner_snorkel_data |>
 # by section
 cleaner_snorkel_data |> 
   group_by(section_name) |> 
-  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
-  knitr::kable(col.names = c('section name', 'total fish counted'))
+  summarise(total_fish_obs = length(fish_count)) |> 
+  knitr::kable(col.names = c('section name', 'total fish observations'))
 ```
 
-| section name                  | total fish counted |
-|:------------------------------|-------------------:|
-| Aleck Riffle                  |              27650 |
-| Auditorium Riffle             |              32800 |
-| Bedrock Park                  |               1130 |
-| Bedrock Riffle                |              63420 |
-| Big Riffle                    |                816 |
-| Eye Riffle                    |              24662 |
-| G95                           |               8391 |
-| Gateway Riffle                |              11966 |
-| Goose Riffle                  |               3913 |
-| Gridley Riffle                |                618 |
-| Hatchery Ditch                |              28177 |
-| Hatchery Ditch and Mo’s Ditch |              83928 |
-| Hatchery Riffle               |              21144 |
-| Hatchery and Mo’s Riffles     |               1708 |
-| Junkyard Riffle               |                455 |
-| Keister Riffle                |                  1 |
-| Kiester Riffle                |                250 |
-| Matthews Riffle               |              46169 |
-| McFarland                     |                973 |
-| Mo’s Ditch                    |                537 |
-| Robinson Riffle               |              59692 |
-| Steep Riffle                  |              89984 |
-| Trailer Park                  |              96505 |
-| Trailer Park Riffle           |                 13 |
-| Vance Riffle                  |               6671 |
-| NA                            |              10634 |
+| section name                  | total fish observations |
+|:------------------------------|------------------------:|
+| Aleck Riffle                  |                      51 |
+| Auditorium Riffle             |                      31 |
+| Bedrock Park Riffle           |                      54 |
+| Bedrock Riffle                |                      35 |
+| Big Riffle                    |                      21 |
+| Eye Riffle                    |                     123 |
+| G95                           |                      42 |
+| Gateway Riffle                |                      80 |
+| Goose Riffle                  |                      16 |
+| Gridley Riffle                |                      18 |
+| Hatchery Ditch                |                     171 |
+| Hatchery Ditch and Mo’s Ditch |                      95 |
+| Hatchery Riffle               |                     149 |
+| Hatchery and Mo’s Riffles     |                      54 |
+| Junkyard Riffle               |                      16 |
+| Kiester Riffle                |                       7 |
+| Matthews Riffle               |                      59 |
+| McFarland                     |                       9 |
+| Mo’s Ditch                    |                       9 |
+| Robinson Riffle               |                     108 |
+| Steep Riffle                  |                     168 |
+| Trailer Park Riffle           |                      62 |
+| Vance Riffle                  |                      36 |
+| NA                            |                     585 |
 
 ``` r
 cleaner_snorkel_data |> 
   group_by(section_name) |> 
-  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
+  summarise(total_fish_obs = length(fish_count)) |> 
   ggplot() + 
-  geom_col(aes(x = section_name, y = total_fish_counts)) +
+  geom_col(aes(x = section_name, y = total_fish_obs)) +
+  xlab("section name") + ylab("total fish count observations") + 
   coord_flip()
 ```
 
@@ -275,21 +278,22 @@ cleaner_snorkel_data |>
 # by section
 cleaner_snorkel_data |> 
   group_by(channel_flow_type) |> 
-  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
-  knitr::kable(col.names = c('channel flow type', 'total fish counted'))
+  summarise(total_fish_obs = length(fish_count)) |> 
+  knitr::kable(col.names = c('channel flow type', 'total fish count observations'))
 ```
 
-| channel flow type | total fish counted |
-|:------------------|-------------------:|
-| high flow channel |              22087 |
-| low flow channel  |             600120 |
+| channel flow type | total fish count observations |
+|:------------------|------------------------------:|
+| high flow channel |                           165 |
+| low flow channel  |                          1834 |
 
 ``` r
 cleaner_snorkel_data |> 
   group_by(channel_flow_type) |> 
-  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
+  summarise(total_fish_obs = length(fish_count)) |> 
   ggplot() + 
-  geom_col(aes(x = channel_flow_type, y = total_fish_counts)) +
+  geom_col(aes(x = channel_flow_type, y = total_fish_obs)) +
+  xlab("channel flow type") + ylab("total fish count observations") + 
   coord_flip()
 ```
 
@@ -328,142 +332,59 @@ summary(cleaner_snorkel_data$est_size)
     ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
     ##    30.0    45.0    60.0   126.3    85.0   950.0       2
 
-## HSI Development
+#### Large Wood
 
-### Apply weights to variables and develop HSI
-
-``` r
-substrate_scoring <- c('1' = 1,'2' = 1,'3' = 2, '4' = 5,'5' = 5, '6' = 2,'0' = 0)
-instream_cover_scoring <- c('A' = 0, "B" = 2, "C" = 4, "D" = 4, "E" = 0, "F" = 0)
-overhead_cover_scoring <- c('0' = 0, '1' = 2,'2' = 4,'3' = 2)
-
-# Define weights for vegetation and substrate
-instream_cover_weight <- 0.6
-overhead_cover_weight <- 0.3 
-substrate_weight <- 0.4
-
-hsi_dev <- snorkel_data_dev |> 
-  mutate(normalized_fish_count = fish_count/max(fish_count)) |> 
-  mutate(
-    instream_cover_score = instream_cover_scoring[instream_cover_unique],
-    substrate_score = substrate_scoring[substrate_unique],
-    overhead_cover_score = overhead_cover_scoring[overhead_cover_unique],
-    hsi = as.numeric((instream_cover_score * instream_cover_weight +
-             overhead_cover_score * overhead_cover_weight + 
-           substrate_score * substrate_weight) * normalized_fish_count
-    )) |> 
-  mutate(normalized_hsi = hsi/max(hsi, na.rm = TRUE)) |> 
-  glimpse()
-```
-
-    ## Rows: 7,509
-    ## Columns: 17
-    ## $ section_name          <chr> NA, NA, "Hatchery Riffle", "Hatchery Riffle", "H…
-    ## $ date                  <date> 2010-08-11, 2010-08-17, 2018-03-19, 2018-03-19,…
-    ## $ fish_count            <dbl> 6, 1, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50…
-    ## $ substrate             <chr> "5", "5", "13", "13", "13", "13", "13", "13", "1…
-    ## $ instream_cover        <chr> "A", "A", "BDEF", "BDEF", "BDEF", "BDEF", "BDEF"…
-    ## $ overhead_cover        <chr> "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"…
-    ## $ size_class            <chr> "VI", "VI", NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-    ## $ est_size              <dbl> 900, 600, 35, 35, 35, 35, 35, 35, 35, 35, 40, 40…
-    ## $ substrate_unique      <chr> "5", "5", "1", "1", "1", "1", "3", "3", "3", "3"…
-    ## $ instream_cover_unique <chr> "A", "A", "B", "D", "E", "F", "B", "D", "E", "F"…
-    ## $ overhead_cover_unique <chr> "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"…
-    ## $ normalized_fish_count <dbl> 0.00024, 0.00004, 0.00200, 0.00200, 0.00200, 0.0…
-    ## $ instream_cover_score  <dbl> 0, 0, 2, 4, 0, 0, 2, 4, 0, 0, 2, 4, 0, 0, 2, 4, …
-    ## $ substrate_score       <dbl> 5, 5, 1, 1, 1, 1, 2, 2, 2, 2, 1, 1, 1, 1, 2, 2, …
-    ## $ overhead_cover_score  <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, …
-    ## $ hsi                   <dbl> 0.00048, 0.00008, 0.00320, 0.00560, 0.00080, 0.0…
-    ## $ normalized_hsi        <dbl> 1.090909e-04, 1.818182e-05, 7.272727e-04, 1.2727…
+- assuming `lwd_number` stands for large wood number
+- `28` NAs for large wood
+- mostly `0` values with some values in the 3000 range. The most being
+  `16` observations at a `lwd_number` of `3006`
 
 ``` r
-hsi_dev |> 
-  ggplot() +
-  geom_jitter(aes(y = normalized_hsi, x = substrate_unique, color = fish_count))
+table(as.numeric(cleaner_snorkel_data$lwd_number), useNA = "always")
 ```
 
-    ## Warning: Removed 22 rows containing missing values (`geom_point()`).
+    ## 
+    ##    0 3001 3002 3003 3004 3005 3006 3007 3008 3010 3013 3018 3020 <NA> 
+    ## 1928    2    1    7    1    1   16    6    2    4    1    1    1   28
+
+## HSI Dev
+
+### Mark Gard 1998 Process
+
+1.  Determine number of redds with each substrate-size class
+2.  Calculate the proportion of redds with each substrate size class
+3.  Calculate the HSC value for each substrate size class by dividing
+    the proportion of redds in each substrate class by the proportion of
+    redds with the most frequent substrate class
+
+#### Discussion
+
+- This process incorporates substrate only - will need to add depth,
+  velocity, and cover  
+- This keeps the substrate types grouped - should we ungroup?
+- Used fish counts instead of redds
+
+``` r
+hsi_dev_markgard_1998 <- cleaner_snorkel_data |> 
+  group_by(substrate) |> # note this is grouped by multiple substrate types
+  summarise(n_fish = sum(fish_count)) |>  # don't have a value for redds
+  mutate(prop_fish_count = n_fish/sum(n_fish)) |> 
+  ungroup()
+
+most_freq <- hsi_dev_markgard_1998 |> 
+  arrange(desc(n_fish)) |> 
+  slice(1) 
+
+hsi_dev_markgard_1998 <- hsi_dev_markgard_1998 |> 
+  mutate(hsc = prop_fish_count/most_freq$prop_fish_count)
+
+ggplot(hsi_dev_markgard_1998) +
+  geom_col(aes(y = hsc, x = substrate)) +
+  coord_flip()
+```
 
 ![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
 ``` r
-hsi_dev |> 
-  ggplot() +
-  geom_jitter(aes(y = normalized_hsi, x = instream_cover_unique, color = fish_count))
+knitr::knit_exit()
 ```
-
-    ## Warning: Removed 22 rows containing missing values (`geom_point()`).
-
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-2.png)<!-- -->
-
-``` r
-hsi_dev |> 
-  ggplot() +
-  geom_jitter(aes(y = normalized_hsi, x = overhead_cover_unique, color = fish_count))
-```
-
-    ## Warning: Removed 22 rows containing missing values (`geom_point()`).
-
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-3.png)<!-- -->
-
-``` r
-hsi_dev |> 
-  ggplot() +
-  geom_histogram(aes(x = normalized_hsi))
-```
-
-    ## `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.
-
-    ## Warning: Removed 22 rows containing non-finite values (`stat_bin()`).
-
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-4.png)<!-- -->
-
-``` r
-hsi_dev |> 
-  ggplot() +
-  geom_point(aes(x = fish_count, y = normalized_hsi, color = instream_cover_unique))
-```
-
-    ## Warning: Removed 22 rows containing missing values (`geom_point()`).
-
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-5.png)<!-- -->
-
-``` r
-hsi_dev |>  
-  ggplot() +
-  geom_point(aes(x = fish_count, y = normalized_hsi)) +
-  facet_wrap(~section_name)
-```
-
-    ## Warning: Removed 22 rows containing missing values (`geom_point()`).
-
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-6.png)<!-- -->
-
-### Create a single HSI per fish count
-
-``` r
-hsi_grouped <- hsi_dev |> 
-  group_by(fish_count) |> 
-  summarise(hsi_val_mean = mean(normalized_hsi, na.rm = TRUE),
-            hsi_val_median = median(normalized_hsi, na.rm = TRUE))
-
-hsi_grouped |> 
-  ggplot() + 
-  geom_point(aes(x = fish_count, y = hsi_val_mean)) + 
-  geom_smooth(aes(x = fish_count, y = hsi_val_mean))
-```
-
-    ## `geom_smooth()` using method = 'loess' and formula = 'y ~ x'
-
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
-
-``` r
-hsi_grouped |> 
-  ggplot() + 
-  geom_point(aes(x = fish_count, y = hsi_val_median)) + 
-  geom_smooth(aes(x = fish_count, y = hsi_val_median))
-```
-
-    ## `geom_smooth()` using method = 'loess' and formula = 'y ~ x'
-
-![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-8-2.png)<!-- -->

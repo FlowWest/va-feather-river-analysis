@@ -18,9 +18,6 @@ theme_set(theme_minimal())
 
 -   explanation for high fish counts, how are these counted?
 -   habitat types are not mutually exclusive, does it make sense to assign weights to types?
--   fish use by habitat type or hsi?
--   how complete is each year of data? by section? by water year?
--   how many times are they surveying each location in a given year?
 -   unique hsi developed for high and low flow channels?
 -   is there more data? froroville (1999-2003) - FR S and S Oroville.MDB (ashley slacked to me)
 
@@ -28,6 +25,10 @@ theme_set(theme_minimal())
 
 -   look into how CVPIA habitat docs defined the substrate HSI <https://s3-us-west-2.amazonaws.com/cvpiahabitat-r-package/cvpia-sit-model-inputs/Feather_FERC_IFIM_Phase_2.pdf>
 -   continue lit review of HSI methods
+
+### Limitations:
+
+* DWR HSC does not include Cover and is outdated <https://s3-us-west-2.amazonaws.com/cvpiahabitat-r-package/cvpia-sit-model-inputs/Feather_FERC_IFIM_Phase_2.pdf>
 
 ```{r}
 
@@ -49,11 +50,12 @@ cleaner_snorkel_data <- readRDS('cleaner_snorkel_data.RDS') |>
                                   section_name == "Moes" ~ "Mo's Ditch",
                                   section_name == "Aleck" ~ "Aleck Riffle",
                                   section_name == "Lower Mcfarland" ~ "McFarland",
-                                  section_name %in% c("Bed Rock Riffle", "Bedrock") ~ "Bedrock Riffle",
+                                  section_name %in% c("Bed Rock Riffle", "Bedrock", "Bedrock Park") ~ "Bedrock Park Riffle",
                                   section_name == "Steep" ~ "Steep Riffle",
-                                  section_name == "Keister" ~ "Kiester Riffle",
+                                  section_name %in% c("Keister", "Keister Riffle") ~ "Kiester Riffle",
                                   section_name == "Junkyard" ~ "Junkyard Riffle",
                                   section_name == "Gateway" ~ "Gateway Riffle",
+                                  section_name == "Trailer Park" ~ "Trailer Park Riffle",
                                   section_name %in% c("Hatchery Ditch And Moes", "Hatchery Ditch Moes Ditch", 
                                                       "Hatchery Side Channel Moes Ditch", 
                                                       "Hatchery Ditch And Moes Ditch", 
@@ -138,47 +140,50 @@ snorkel_data_dev |>
 
 #### Data Completeness
 
-By year, river section, water year
+Summarizes how complete the fish count data is by `year`, `section` and `flow type`. 
 
 ```{r}
 # by year
 cleaner_snorkel_data |> 
   mutate(year = year(date)) |>
   group_by(year) |> 
-  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
-  knitr::kable(col.names = c('year', 'total fish counted'))
+  summarise(total_fish_obs = length(fish_count))|> 
+  knitr::kable(col.names = c('year', 'total fish observations'))
 
 cleaner_snorkel_data |> 
   group_by(year(date)) |> 
-  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
+  summarise(total_fish_obs = length(fish_count)) |> 
   rename(year = `year(date)`) |> 
   ggplot() + 
-  geom_col(aes(x = as.factor(year), y = total_fish_counts))
+  geom_col(aes(x = as.factor(year), y = total_fish_obs)) +
+  xlab("year") + ylab("total fish count observations")
 
 # by section
 cleaner_snorkel_data |> 
   group_by(section_name) |> 
-  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
-  knitr::kable(col.names = c('section name', 'total fish counted'))
+  summarise(total_fish_obs = length(fish_count)) |> 
+  knitr::kable(col.names = c('section name', 'total fish observations'))
 
 cleaner_snorkel_data |> 
   group_by(section_name) |> 
-  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
+  summarise(total_fish_obs = length(fish_count)) |> 
   ggplot() + 
-  geom_col(aes(x = section_name, y = total_fish_counts)) +
+  geom_col(aes(x = section_name, y = total_fish_obs)) +
+  xlab("section name") + ylab("total fish count observations") + 
   coord_flip()
 
 # by section
 cleaner_snorkel_data |> 
   group_by(channel_flow_type) |> 
-  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
-  knitr::kable(col.names = c('channel flow type', 'total fish counted'))
+  summarise(total_fish_obs = length(fish_count)) |> 
+  knitr::kable(col.names = c('channel flow type', 'total fish count observations'))
 
 cleaner_snorkel_data |> 
   group_by(channel_flow_type) |> 
-  summarise(total_fish_counts = sum(fish_count, na.rm = TRUE)) |> 
+  summarise(total_fish_obs = length(fish_count)) |> 
   ggplot() + 
-  geom_col(aes(x = channel_flow_type, y = total_fish_counts)) +
+  geom_col(aes(x = channel_flow_type, y = total_fish_obs)) +
+  xlab("channel flow type") + ylab("total fish count observations") + 
   coord_flip()
 
 ```
@@ -204,11 +209,63 @@ cleaner_snorkel_data |>
 table(cleaner_snorkel_data$size_class, useNA = "always")
 summary(cleaner_snorkel_data$est_size)
 
+```
 
+#### Large Wood
+
+* assuming `lwd_number` stands for large wood number
+* `28` NAs for large wood
+* mostly `0` values with some values in the 3000 range. The most being `16` observations at a `lwd_number` of `3006`
+
+
+```{r}
+table(as.numeric(cleaner_snorkel_data$lwd_number), useNA = "always")
 
 ```
 
-## HSI Development
+
+## HSI Dev
+
+### Mark Gard 1998 Process 
+
+1. Determine number of redds with each substrate-size class 
+2. Calculate the proportion of redds with each substrate size class 
+3. Calculate the HSC value for each substrate size class by dividing the proportion of redds in each substrate class by the proportion of redds with the most frequent substrate class 
+
+#### Discussion 
+
+* This process incorporates substrate only - will need to add depth, velocity, and cover  
+* This keeps the substrate types grouped - should we ungroup?
+* Used fish counts instead of redds 
+
+```{r}
+hsi_dev_markgard_1998 <- cleaner_snorkel_data |> 
+  group_by(substrate) |> # note this is grouped by multiple substrate types
+  summarise(n_fish = sum(fish_count)) |>  # don't have a value for redds
+  mutate(prop_fish_count = n_fish/sum(n_fish)) |> 
+  ungroup()
+
+most_freq <- hsi_dev_markgard_1998 |> 
+  arrange(desc(n_fish)) |> 
+  slice(1) 
+
+hsi_dev_markgard_1998 <- hsi_dev_markgard_1998 |> 
+  mutate(hsc = prop_fish_count/most_freq$prop_fish_count)
+
+ggplot(hsi_dev_markgard_1998) +
+  geom_col(aes(y = hsc, x = substrate)) +
+  coord_flip()
+
+```
+
+
+```{r}
+
+knitr::knit_exit()
+
+```
+
+## HSI Draft Development
 
 ### Apply weights to variables and develop HSI
 
