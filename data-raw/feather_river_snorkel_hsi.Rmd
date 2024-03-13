@@ -7,6 +7,8 @@ output: github_document
 
 ```{r setup, include=FALSE}
 library(tidyverse)
+library(tidymodels)
+
 
 knitr::opts_chunk$set(echo = TRUE)
 
@@ -18,24 +20,30 @@ theme_set(theme_minimal())
 
 -   explanation for high fish counts, how are these counted?
 -   habitat types are not mutually exclusive, does it make sense to assign weights to types?
--   unique hsi developed for high and low flow channels?
--   is there more data? froroville (1999-2003) - FR S and S Oroville.MDB (ashley slacked to me)
+-   unique hsi developed for high and low flow channels? habitat type (pool, riffle, run)?
+-   `NA`s in `fish_count`, could these be no-fish observations?
+
+**Species**: Chinook, most likely
 
 ### TODO:
 
 -   look into how CVPIA habitat docs defined the substrate HSI <https://s3-us-west-2.amazonaws.com/cvpiahabitat-r-package/cvpia-sit-model-inputs/Feather_FERC_IFIM_Phase_2.pdf>
 -   continue lit review of HSI methods
+-   review cluster analysis and survey analysis techniques to see if they could be applied
+-   incorporate additional years of data
+-   review and add mini snorkel data
 
 ### Limitations:
 
-* DWR HSC does not include Cover and is outdated <https://s3-us-west-2.amazonaws.com/cvpiahabitat-r-package/cvpia-sit-model-inputs/Feather_FERC_IFIM_Phase_2.pdf>
+-   DWR HSC does not include Cover and is outdated <https://s3-us-west-2.amazonaws.com/cvpiahabitat-r-package/cvpia-sit-model-inputs/Feather_FERC_IFIM_Phase_2.pdf>
+-   Mostly have data for fish presence, not absence. A lot of NAs in fish_count.
 
 ```{r}
 
 # https://github.com/SRJPE/JPE-datasets/blob/main/data-raw/qc-markdowns/seine-snorkel-data/feather-river/feather_snorkel_qc.Rmd
 cleaner_snorkel_data <- readRDS('cleaner_snorkel_data.RDS') |> 
   rename(fish_count = count) |> 
-  filter(!is.na(fish_count) & !is.na(instream_cover)) |> 
+  filter(!is.na(fish_count)) |> 
   mutate(section_name = case_when(section_name == "Eye" ~ "Eye Riffle",
                                   section_name == "Vance West" ~ "Vance Riffle",
                                   section_name %in% c("Hatchery Side Ditch") ~ "Hatchery Ditch",
@@ -103,7 +111,7 @@ snorkel_data_dev <- cleaner_snorkel_data |>
 ### Variable: `instream_cover`
 
 | CoverCode | Cover                                            | Proposed Weight |
-|-----------------|---------------------------------------|-----------------|
+|------------------|-------------------------------------|------------------|
 | A         | No apparent cover                                | 0               |
 | B         | Small instream objects/small-medium woody debris | 2               |
 | C         | Large instream objects/large woody debris        | 4               |
@@ -114,7 +122,7 @@ snorkel_data_dev <- cleaner_snorkel_data |>
 ### Variable: `overhead_cover`
 
 | CoverCode | Cover                                         | Proposed Weight |
-|-----------------|--------------------------------------|-----------------|
+|------------------|-------------------------------------|------------------|
 | 0         | No Apparent Cover                             | 0               |
 | 1         | Overhanging veg/obj (\< 0.5 m above surface)  | 2               |
 | 2         | Overhanging veg/obj (0.5 to 2 m above surface | 4               |
@@ -140,7 +148,7 @@ snorkel_data_dev |>
 
 #### Data Completeness
 
-Summarizes how complete the fish count data is by `year`, `section` and `flow type`. 
+Summarizes how complete the fish count data is by `year`, `section` and `flow type`.
 
 ```{r}
 # by year
@@ -213,30 +221,28 @@ summary(cleaner_snorkel_data$est_size)
 
 #### Large Wood
 
-* assuming `lwd_number` stands for large wood number
-* `28` NAs for large wood
-* mostly `0` values with some values in the 3000 range. The most being `16` observations at a `lwd_number` of `3006`
-
+-   assuming `lwd_number` stands for large wood number
+-   `28` NAs for large wood
+-   mostly `0` values with some values in the 3000 range. The most being `16` observations at a `lwd_number` of `3006`
 
 ```{r}
 table(as.numeric(cleaner_snorkel_data$lwd_number), useNA = "always")
 
 ```
 
-
 ## HSI Dev
 
-### Mark Gard 1998 Process 
+### Mark Gard 1998 Process
 
-1. Determine number of redds with each substrate-size class 
-2. Calculate the proportion of redds with each substrate size class 
-3. Calculate the HSC value for each substrate size class by dividing the proportion of redds in each substrate class by the proportion of redds with the most frequent substrate class 
+1.  Determine number of redds with each substrate-size class
+2.  Calculate the proportion of redds with each substrate size class
+3.  Calculate the HSC value for each substrate size class by dividing the proportion of redds in each substrate class by the proportion of redds with the most frequent substrate class
 
-#### Discussion 
+#### Discussion
 
-* This process incorporates substrate only - will need to add depth, velocity, and cover  
-* This keeps the substrate types grouped - should we ungroup?
-* Used fish counts instead of redds 
+-   This process incorporates substrate only - will need to add depth, velocity, and cover\
+-   This keeps the substrate types grouped - should we ungroup?
+-   Used fish counts instead of redds
 
 ```{r}
 hsi_dev_markgard_1998 <- cleaner_snorkel_data |> 
@@ -258,6 +264,160 @@ ggplot(hsi_dev_markgard_1998) +
 
 ```
 
+## HSI dev using linear regression
+
+#### Assumptions:
+
+-   removed outliers of `fish_count` \> 50
+-   substrate and cover variables remain grouped
+-   `NA`s on `fish_count` are removed, `NA`s in other variables remain
+-   Need to add velocity and depth
+
+```{r message=FALSE, warning=FALSE}
+format_snorkel_data <- cleaner_snorkel_data |> 
+  select(fish_count, flow, instream_cover, overhead_cover, substrate, temperature, turbidity, hydrology_code, water_depth_m) |> 
+  mutate(instream_cover = as.factor(instream_cover),
+         overhead_cover = as.factor(overhead_cover),
+         hydrology_code = as.factor(hydrology_code),
+         substrate = as.factor(substrate),
+         fish_presence = as.factor(ifelse(fish_count > 0, "1", "0"))) |> # necessary for a logistic regression 
+  filter(fish_count <= 50) |> # removes outliers
+  glimpse()
+
+# TODO: velocity + depth
+
+# Define a recipe
+rec <- recipe(fish_count ~ instream_cover + overhead_cover + substrate + 
+                flow + hydrology_code + turbidity + temperature,   data = format_snorkel_data)  |> 
+  step_dummy(all_nominal(), one_hot = TRUE)
+
+# Split the data into training and testing sets
+data_split <- initial_split(format_snorkel_data, prop = 0.8, strata = "fish_count")
+data_train <- training(data_split)
+data_test <- testing(data_split)
+
+# Create a linear regression model
+lm_reg <- linear_reg() %>%
+  set_engine("lm") %>%
+  set_mode("regression")
+
+# Create a workflow
+wf <- workflow() %>%
+  add_recipe(rec) %>%
+  add_model(lm_reg)
+
+# Train the model
+wf_fit <- wf |> 
+  fit(data_train)
+
+# Make predictions
+predictions <- predict(wf_fit, data_test) |> 
+  bind_cols(data_test)
+
+wf_fit |> glance()
+wf_fit |> tidy()
+wf_fit$fit$fit |> dotwhisker::dwplot()
+
+# Normalize predicted probabilities
+predictions$normalized_predicted_prob <- (predictions$.pred - min(predictions$.pred, na.rm = TRUE)) / 
+                                        (max(predictions$.pred, na.rm = TRUE) - min(predictions$.pred, na.rm = TRUE))
+
+# Create HSI
+predictions$HSI <- predictions$normalized_predicted_prob
+
+ggplot(predictions, aes(x = fish_count, y = .pred)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +  # Add a linear regression line
+  labs(x = "Actual Fish Abundance", y = "Predicted Fish Abundance") +
+  ggtitle("Actual vs. Predicted Fish Abundance")
+
+ggplot(predictions, aes(x = substrate, y = HSI)) +
+  geom_boxplot() +
+  geom_point() 
+
+ggplot(predictions, aes(x = instream_cover, y = HSI)) +
+  geom_boxplot() +
+  geom_point() 
+
+ggplot(predictions, aes(x = overhead_cover, y = HSI)) +
+  geom_boxplot() +
+  geom_point() 
+
+```
+
+## Logistic Regression HSI
+
+```{r eval=FALSE, include=FALSE}
+format_snorkel_data <- cleaner_snorkel_data |> 
+  select(fish_count, flow, instream_cover, overhead_cover, substrate, temperature, turbidity, hydrology_code, water_depth_m) |> 
+  mutate(instream_cover = as.factor(instream_cover),
+         overhead_cover = as.factor(overhead_cover),
+         hydrology_code = as.factor(hydrology_code),
+         substrate = as.factor(substrate),
+         fish_presence = as.factor(ifelse(fish_count > 0, "1", "0"))) |> # necessary for a logistic regression 
+  glimpse()
+
+# TODO: velocity + depth
+
+# Define a recipe
+rec <- recipe(fish_presence ~ instream_cover + overhead_cover + substrate + 
+                flow + hydrology_code + turbidity + temperature,   data = format_snorkel_data)  |> 
+  step_dummy(all_nominal(), one_hot = TRUE)
+
+# Split the data into training and testing sets
+data_split <- initial_split(format_snorkel_data, prop = 0.8, strata = "fish_presence")
+data_train <- training(data_split)
+data_test <- testing(data_split)
+
+# Create a logistic regression model
+log_reg <- logistic_reg() |> 
+  set_engine("glm") |> 
+  set_mode("classification") |> translate()
+
+# Create a workflow
+wf <- workflow()  |> 
+  add_recipe(rec) |> 
+  add_model(log_reg)
+
+# Train the model
+wf_fit <- wf |> 
+  fit(data_train)
+
+# Make predictions
+predictions <- predict(wf_fit, data_test) |> 
+  bind_cols(data_test)
+
+wf_fit |> glance()
+wf_fit |> tidy()
+# wf_fit$fit$fit |> dotwhisker::dwplot()
+
+# Normalize predicted probabilities
+predictions$normalized_predicted_prob <- (predictions$.pred - min(predictions$.pred, na.rm = TRUE)) / 
+                                        (max(predictions$.pred, na.rm = TRUE) - min(predictions$.pred, na.rm = TRUE))
+
+# Create HSI
+predictions$HSI <- predictions$normalized_predicted_prob
+
+ggplot(predictions, aes(x = fish_count, y = .pred)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +  # Add a linear regression line
+  labs(x = "Actual Fish Abundance", y = "Predicted Fish Abundance") +
+  ggtitle("Actual vs. Predicted Fish Abundance")
+
+ggplot(predictions, aes(x = substrate, y = HSI)) +
+  geom_boxplot() +
+  geom_point() 
+
+ggplot(predictions, aes(x = instream_cover, y = HSI)) +
+  geom_boxplot() +
+  geom_point() 
+
+ggplot(predictions, aes(x = overhead_cover, y = HSI)) +
+  geom_boxplot() +
+  geom_point() 
+
+
+```
 
 ```{r}
 
