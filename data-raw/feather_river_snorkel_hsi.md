@@ -1,7 +1,7 @@
 Feather River - HSI exploration
 ================
 Maddee Rubenson (FlowWest)
-2024-03-13
+2024-03-26
 
 ### Questions/Notes
 
@@ -32,72 +32,94 @@ Maddee Rubenson (FlowWest)
   fish_count.
 
 ``` r
-# https://github.com/SRJPE/JPE-datasets/blob/main/data-raw/qc-markdowns/seine-snorkel-data/feather-river/feather_snorkel_qc.Rmd
-cleaner_snorkel_data <- readRDS('cleaner_snorkel_data.RDS') |> 
+#https://console.cloud.google.com/storage/browser/_details/jpe-dev-bucket/juvenile-rearing[…]_object?project=jpe-development&supportedpurview=project
+cleaner_snorkel_data <- read_csv('combined_feather_snorkel_data.csv') |> 
   rename(fish_count = count) |> 
   filter(!is.na(fish_count)) |> 
-  mutate(section_name = case_when(section_name == "Eye" ~ "Eye Riffle",
-                                  section_name == "Vance West" ~ "Vance Riffle",
-                                  section_name %in% c("Hatchery Side Ditch") ~ "Hatchery Ditch",
-                                  section_name == "Hatchery Side Channel" ~ "Hatchery Riffle", # TODO: check this one
-                                  section_name == "Gridley Side Channel" ~ "Gridley Riffle", # TODO: check this one
-                                  section_name %in% c("Robinson", "Lower Robinson") ~ "Robinson Riffle",
-                                  section_name == "Goose" ~ "Goose Riffle", 
-                                  section_name == "Auditorium" ~ "Auditorium Riffle",
-                                  section_name %in% c("Matthews", "Mathews", "Mathews Riffle") ~ "Matthews Riffle",
-                                  section_name %in% c("G95 Side Channel", "G95 West Side Channel", "G95 Side West", "G95 Side") ~ "G95", 
-                                  section_name %in% c("Vance West Riffle", "Vance W Riffle", "Vance East") ~ "Vance Riffle",
-                                  section_name == "Moes" ~ "Mo's Ditch",
-                                  section_name == "Aleck" ~ "Aleck Riffle",
-                                  section_name == "Lower Mcfarland" ~ "McFarland",
-                                  section_name %in% c("Bed Rock Riffle", "Bedrock", "Bedrock Park") ~ "Bedrock Park Riffle",
-                                  section_name == "Steep" ~ "Steep Riffle",
-                                  section_name %in% c("Keister", "Keister Riffle") ~ "Kiester Riffle",
-                                  section_name == "Junkyard" ~ "Junkyard Riffle",
-                                  section_name == "Gateway" ~ "Gateway Riffle",
-                                  section_name == "Trailer Park" ~ "Trailer Park Riffle",
-                                  section_name %in% c("Hatchery Ditch And Moes", "Hatchery Ditch Moes Ditch", 
-                                                      "Hatchery Side Channel Moes Ditch", 
-                                                      "Hatchery Ditch And Moes Ditch", 
-                                                      "Hatchery Side Channel And Moes Ditch", 
-                                                      "Hatchery Ditch Moes") ~ "Hatchery Ditch and Mo's Ditch", # TODO: check this one since they are separate in the map
-                                  section_name %in% c("Hatchery And Moes Side Channels", "Hatchery Side Ch Moes Side Ch", 
-                                                      "Hatchery Side Channel And Moes") ~ "Hatchery and Mo's Riffles", # TODO: check on this one 
-                                  .default = as.character(section_name))) |> 
+  mutate(date = lubridate::mdy(date)) |> 
   glimpse()
 ```
 
-    ## Rows: 2,444
-    ## Columns: 27
-    ## $ survey_id            <chr> "2", "2", "2", "2", "3", "3", "3", "3", "3", "3",…
-    ## $ date                 <date> 2007-06-27, 2007-06-27, 2007-06-27, 2007-06-27, …
-    ## $ flow                 <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ weather_code         <chr> NA, NA, NA, NA, "clear", "clear", "clear", "clear…
-    ## $ turbidity            <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ temperature          <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ time_of_temperature  <time> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, …
-    ## $ start_time           <time>       NA,       NA,       NA,       NA, 10:00:00…
-    ## $ end_time             <time>       NA,       NA,       NA,       NA, 14:00:00…
-    ## $ section_name         <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ units_covered        <chr> NA, NA, NA, NA, "26,33,30,31,31a,32,32a", "26,33,…
-    ## $ survey_comments      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ observation_id       <chr> "79", "81", "84", "86", "96", "98", "99", "100", …
-    ## $ unit                 <chr> "169", "173", "185", "215B", "26", "33", "33", "3…
-    ## $ fish_count           <dbl> 50, 4, 15, 7, 0, 3, 30, 1, 15, 70, 14, 245, 3, 1,…
-    ## $ size_class           <chr> "III", "I", "III", "III", NA, "II", "III", NA, NA…
-    ## $ est_size             <dbl> NA, NA, NA, NA, NA, 50, 75, 100, 100, 75, 75, 75,…
-    ## $ substrate            <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ instream_cover       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ overhead_cover       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ hydrology_code       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ water_depth_m        <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ lwd_number           <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ observation_comments <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-    ## $ run                  <chr> "unknown", "unknown", "unknown", "unknown", "unkn…
-    ## $ tagged               <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
-    ## $ clipped              <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, …
+    ## Rows: 6637 Columns: 31
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr  (14): date, weather, section_name, units_covered, unit, size_class, ins...
+    ## dbl  (13): survey_id, flow, turbidity, count, est_size, substrate, overhead_...
+    ## lgl   (2): tagged, clipped
+    ## time  (2): start_time, end_time
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+    ## Rows: 5,944
+    ## Columns: 31
+    ## $ survey_id      <dbl> 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 7, 7, 9, 10, …
+    ## $ date           <date> 2007-06-27, 2007-06-27, 2007-06-27, 2007-06-27, 2007-0…
+    ## $ flow           <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ weather        <chr> NA, NA, NA, NA, "clear", "clear", "clear", "clear", "cl…
+    ## $ turbidity      <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ start_time     <time>       NA,       NA,       NA,       NA, 10:00:00, 10:0…
+    ## $ end_time       <time>       NA,       NA,       NA,       NA, 14:00:00, 14:0…
+    ## $ section_name   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ units_covered  <chr> NA, NA, NA, NA, "26,33,30,31,31a,32,32a", "26,33,30,31,…
+    ## $ unit           <chr> "169", "173", "185", "215B", "26", "33", "33", "33", "3…
+    ## $ fish_count     <dbl> 50, 4, 15, 7, 0, 3, 30, 1, 15, 70, 14, 245, 3, 1, 4, 4,…
+    ## $ size_class     <chr> "III", "I", "III", "III", NA, "II", "III", NA, NA, "III…
+    ## $ est_size       <dbl> NA, NA, NA, NA, NA, 50, 75, 100, 100, 75, 75, 75, 100, …
+    ## $ substrate      <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ instream_cover <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ overhead_cover <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ hydrology      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ water_depth_m  <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ run            <chr> "unknown", "unknown", "unknown", "unknown", "unknown", …
+    ## $ tagged         <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
+    ## $ clipped        <lgl> FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,…
+    ## $ location       <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ survey_type    <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ section_type   <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ species        <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ fork_length    <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ bank_distance  <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ unit_type      <chr> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ visibility     <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ section_number <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
+    ## $ temperature    <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
 
 ``` r
+# https://github.com/SRJPE/JPE-datasets/blob/main/data-raw/qc-markdowns/seine-snorkel-data/feather-river/feather_snorkel_qc.Rmd
+# cleaner_snorkel_data <- readRDS('cleaner_snorkel_data.RDS') |> 
+#   rename(fish_count = count) |> 
+#   filter(!is.na(fish_count)) |> 
+#   mutate(section_name = case_when(section_name == "Eye" ~ "Eye Riffle",
+#                                   section_name == "Vance West" ~ "Vance Riffle",
+#                                   section_name %in% c("Hatchery Side Ditch") ~ "Hatchery Ditch",
+#                                   section_name == "Hatchery Side Channel" ~ "Hatchery Riffle", # TODO: check this one
+#                                   section_name == "Gridley Side Channel" ~ "Gridley Riffle", # TODO: check this one
+#                                   section_name %in% c("Robinson", "Lower Robinson") ~ "Robinson Riffle",
+#                                   section_name == "Goose" ~ "Goose Riffle", 
+#                                   section_name == "Auditorium" ~ "Auditorium Riffle",
+#                                   section_name %in% c("Matthews", "Mathews", "Mathews Riffle") ~ "Matthews Riffle",
+#                                   section_name %in% c("G95 Side Channel", "G95 West Side Channel", "G95 Side West", "G95 Side") ~ "G95", 
+#                                   section_name %in% c("Vance West Riffle", "Vance W Riffle", "Vance East") ~ "Vance Riffle",
+#                                   section_name == "Moes" ~ "Mo's Ditch",
+#                                   section_name == "Aleck" ~ "Aleck Riffle",
+#                                   section_name == "Lower Mcfarland" ~ "McFarland",
+#                                   section_name %in% c("Bed Rock Riffle", "Bedrock", "Bedrock Park") ~ "Bedrock Park Riffle",
+#                                   section_name == "Steep" ~ "Steep Riffle",
+#                                   section_name %in% c("Keister", "Keister Riffle") ~ "Kiester Riffle",
+#                                   section_name == "Junkyard" ~ "Junkyard Riffle",
+#                                   section_name == "Gateway" ~ "Gateway Riffle",
+#                                   section_name == "Trailer Park" ~ "Trailer Park Riffle",
+#                                   section_name %in% c("Hatchery Ditch And Moes", "Hatchery Ditch Moes Ditch", 
+#                                                       "Hatchery Side Channel Moes Ditch", 
+#                                                       "Hatchery Ditch And Moes Ditch", 
+#                                                       "Hatchery Side Channel And Moes Ditch", 
+#                                                       "Hatchery Ditch Moes") ~ "Hatchery Ditch and Mo's Ditch", # TODO: check this one since they are separate in the map
+#                                   section_name %in% c("Hatchery And Moes Side Channels", "Hatchery Side Ch Moes Side Ch", 
+#                                                       "Hatchery Side Channel And Moes") ~ "Hatchery and Mo's Riffles", # TODO: check on this one 
+#                                   .default = as.character(section_name))) |> 
+#   glimpse()
+
 high_flows <- c('Vance Riffle', 'G95', 'Kiester Riffle', 'Goose Riffle', 'Big Riffle', 'McFarland', 'Gridley Riffle', 'Junkyard Riffle')
 low_flows <- cleaner_snorkel_data |> filter(!(section_name %in% high_flows)) |> filter(!is.na(section_name)) |> pull(section_name) |> unique()
 
@@ -111,23 +133,13 @@ high_flows
 low_flows
 ```
 
-    ##  [1] "Hatchery Riffle"                      
-    ##  [2] "Mo's Ditch"                           
-    ##  [3] "Bedrock Riffle"                       
-    ##  [4] "Trailer Park Riffle"                  
-    ##  [5] "Aleck Riffle"                         
-    ##  [6] "Steep Riffle"                         
-    ##  [7] "Eye Riffle"                           
-    ##  [8] "Bedrock Park Riffle"                  
-    ##  [9] "Gateway Riffle"                       
-    ## [10] "Hatchery Ditch"                       
-    ## [11] "Matthews Riffle"                      
-    ## [12] "Robinson Riffle"                      
-    ## [13] "Hatchery and Mo's Riffles"            
-    ## [14] "Auditorium Riffle"                    
-    ## [15] "Hatchery Ditch and Mo's Ditch"        
-    ## [16] "Hatchery Ditch Lower Moes Ditch Upper"
-    ## [17] "Moes Ditch"
+    ##  [1] "Hatchery Riffle"               "Mo's Ditch"                   
+    ##  [3] "Bedrock Park Riffle"           "Trailer Park Riffle"          
+    ##  [5] "Aleck Riffle"                  "Steep Riffle"                 
+    ##  [7] "Eye Riffle"                    "Gateway Riffle"               
+    ##  [9] "Hatchery Ditch"                "Matthews Riffle"              
+    ## [11] "Robinson Riffle"               "Hatchery and Mo's Riffles"    
+    ## [13] "Auditorium Riffle"             "Hatchery Ditch and Mo's Ditch"
 
 ``` r
 cleaner_snorkel_data <- cleaner_snorkel_data |> 
@@ -137,7 +149,9 @@ cleaner_snorkel_data <- cleaner_snorkel_data |>
 ``` r
 snorkel_data_dev <- cleaner_snorkel_data |> 
   select(section_name, date, fish_count, substrate, instream_cover, overhead_cover, size_class, est_size) |> 
-  mutate(substrate_unique = strsplit(substrate, ""),
+  mutate(substrate = as.character(substrate),
+         overhead_cover = as.character(overhead_cover),
+         substrate_unique = strsplit(substrate, ""),
          instream_cover_unique = strsplit(instream_cover, ""),
          overhead_cover_unique = strsplit(overhead_cover, "")) |> 
   unnest(substrate_unique) |> 
@@ -221,6 +235,11 @@ cleaner_snorkel_data |>
 
 | year | total fish observations |
 |-----:|------------------------:|
+| 1999 |                     650 |
+| 2000 |                     662 |
+| 2001 |                    1650 |
+| 2002 |                     319 |
+| 2003 |                     219 |
 | 2004 |                     143 |
 | 2005 |                     126 |
 | 2007 |                      20 |
@@ -255,34 +274,31 @@ cleaner_snorkel_data |>
   knitr::kable(col.names = c('section name', 'total fish observations'))
 ```
 
-| section name                          | total fish observations |
-|:--------------------------------------|------------------------:|
-| Aleck Riffle                          |                      57 |
-| Auditorium Riffle                     |                      46 |
-| Bedrock Park Riffle                   |                      59 |
-| Bedrock Riffle                        |                      38 |
-| Big Riffle                            |                      22 |
-| Eye Riffle                            |                     131 |
-| G95                                   |                      45 |
-| Gateway Riffle                        |                      95 |
-| Goose Riffle                          |                      16 |
-| Gridley Riffle                        |                      19 |
-| Hatchery Ditch                        |                     171 |
-| Hatchery Ditch Lower Moes Ditch Upper |                       1 |
-| Hatchery Ditch and Mo’s Ditch         |                      97 |
-| Hatchery Riffle                       |                     160 |
-| Hatchery and Mo’s Riffles             |                      55 |
-| Junkyard Riffle                       |                      18 |
-| Kiester Riffle                        |                      12 |
-| Matthews Riffle                       |                      62 |
-| McFarland                             |                      10 |
-| Mo’s Ditch                            |                       9 |
-| Moes Ditch                            |                       1 |
-| Robinson Riffle                       |                     127 |
-| Steep Riffle                          |                     171 |
-| Trailer Park Riffle                   |                      65 |
-| Vance Riffle                          |                      37 |
-| NA                                    |                     920 |
+| section name                  | total fish observations |
+|:------------------------------|------------------------:|
+| Aleck Riffle                  |                      57 |
+| Auditorium Riffle             |                      46 |
+| Bedrock Park Riffle           |                      97 |
+| Big Riffle                    |                      22 |
+| Eye Riffle                    |                     131 |
+| G95                           |                      45 |
+| Gateway Riffle                |                      95 |
+| Goose Riffle                  |                      16 |
+| Gridley Riffle                |                      19 |
+| Hatchery Ditch                |                     171 |
+| Hatchery Ditch and Mo’s Ditch |                      98 |
+| Hatchery Riffle               |                     160 |
+| Hatchery and Mo’s Riffles     |                      55 |
+| Junkyard Riffle               |                      18 |
+| Kiester Riffle                |                      12 |
+| Matthews Riffle               |                      62 |
+| McFarland                     |                      10 |
+| Mo’s Ditch                    |                      10 |
+| Robinson Riffle               |                     127 |
+| Steep Riffle                  |                     171 |
+| Trailer Park Riffle           |                      65 |
+| Vance Riffle                  |                      37 |
+| NA                            |                    4420 |
 
 ``` r
 cleaner_snorkel_data |> 
@@ -307,7 +323,7 @@ cleaner_snorkel_data |>
 | channel flow type | total fish count observations |
 |:------------------|------------------------------:|
 | high flow channel |                           179 |
-| low flow channel  |                          2265 |
+| low flow channel  |                          5765 |
 
 ``` r
 cleaner_snorkel_data |> 
@@ -345,14 +361,14 @@ table(cleaner_snorkel_data$size_class, useNA = "always")
 
     ## 
     ##    I   II  III   IV    V   VI  VII <NA> 
-    ##  272  326  167   48   11   49   55 1516
+    ##  272  326  167   48   11   49   55 5016
 
 ``` r
 summary(cleaner_snorkel_data$est_size)
 ```
 
     ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-    ##     0.0    45.0    60.0   127.2    85.0   950.0     423
+    ##     0.0    45.0    60.0   127.2    85.0   950.0    3923
 
 #### Large Wood
 
@@ -365,9 +381,11 @@ summary(cleaner_snorkel_data$est_size)
 table(as.numeric(cleaner_snorkel_data$lwd_number), useNA = "always")
 ```
 
+    ## Warning: Unknown or uninitialised column: `lwd_number`.
+
     ## 
-    ##    0 3001 3002 3003 3004 3005 3006 3007 3008 3010 3013 3018 3020 <NA> 
-    ## 2040    2    1    7    1    1   16    6    2    4    1    1    1  361
+    ## <NA> 
+    ##    0
 
 ## HSI Dev
 
@@ -405,6 +423,8 @@ ggplot(hsi_dev_markgard_1998) +
   coord_flip()
 ```
 
+    ## Warning: Removed 1 rows containing missing values (`position_stack()`).
+
 ![](feather_river_snorkel_hsi_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
 ## HSI dev using linear regression
@@ -418,18 +438,17 @@ ggplot(hsi_dev_markgard_1998) +
 
 ``` r
 format_snorkel_data <- cleaner_snorkel_data |> 
-  select(fish_count, flow, instream_cover, overhead_cover, substrate, temperature, turbidity, hydrology_code, water_depth_m) |> 
+  select(fish_count, flow, instream_cover, overhead_cover, substrate, temperature, turbidity, water_depth_m) |> 
   mutate(instream_cover = as.factor(instream_cover),
          overhead_cover = as.factor(overhead_cover),
-         hydrology_code = as.factor(hydrology_code),
          substrate = as.factor(substrate),
          fish_presence = as.factor(ifelse(fish_count > 0, "1", "0"))) |> # necessary for a logistic regression 
   filter(fish_count <= 50) |> # removes outliers
   glimpse()
 ```
 
-    ## Rows: 1,844
-    ## Columns: 10
+    ## Rows: 4,105
+    ## Columns: 9
     ## $ fish_count     <dbl> 50, 4, 15, 7, 0, 3, 30, 1, 15, 14, 3, 1, 4, 4, 9, 1, 1,…
     ## $ flow           <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
     ## $ instream_cover <fct> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
@@ -437,7 +456,6 @@ format_snorkel_data <- cleaner_snorkel_data |>
     ## $ substrate      <fct> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
     ## $ temperature    <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
     ## $ turbidity      <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
-    ## $ hydrology_code <fct> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
     ## $ water_depth_m  <dbl> NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA,…
     ## $ fish_presence  <fct> 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1…
 
@@ -446,7 +464,7 @@ format_snorkel_data <- cleaner_snorkel_data |>
 
 # Define a recipe
 rec <- recipe(fish_count ~ instream_cover + overhead_cover + substrate + 
-                flow + hydrology_code + turbidity + temperature,   data = format_snorkel_data)  |> 
+                flow  + turbidity + temperature,   data = format_snorkel_data)  |> 
   step_dummy(all_nominal(), one_hot = TRUE)
 
 # Split the data into training and testing sets
@@ -476,29 +494,29 @@ wf_fit |> glance()
 ```
 
     ## # A tibble: 1 × 12
-    ##   r.squared adj.r.squared sigma statistic  p.value    df logLik   AIC    BIC
-    ##       <dbl>         <dbl> <dbl>     <dbl>    <dbl> <dbl>  <dbl> <dbl>  <dbl>
-    ## 1     0.237         0.182  13.1      4.29 5.32e-29    81 -4746. 9658. 10081.
+    ##   r.squared adj.r.squared sigma statistic  p.value    df logLik   AIC   BIC
+    ##       <dbl>         <dbl> <dbl>     <dbl>    <dbl> <dbl>  <dbl> <dbl> <dbl>
+    ## 1     0.237         0.187  13.1      4.70 4.91e-31    74 -4717. 9586. 9972.
     ## # ℹ 3 more variables: deviance <dbl>, df.residual <int>, nobs <int>
 
 ``` r
 wf_fit |> tidy()
 ```
 
-    ## # A tibble: 92 × 5
-    ##    term                 estimate std.error statistic  p.value
-    ##    <chr>                   <dbl>     <dbl>     <dbl>    <dbl>
-    ##  1 (Intercept)          6.08     19.3          0.315  0.753  
-    ##  2 flow                -0.000892  0.000426    -2.09   0.0366 
-    ##  3 turbidity            1.51      0.613        2.47   0.0137 
-    ##  4 temperature         -0.0393    0.0187      -2.10   0.0363 
-    ##  5 instream_cover_A     7.10      5.10         1.39   0.164  
-    ##  6 instream_cover_AE   NA        NA           NA     NA      
-    ##  7 instream_cover_B    15.0       5.05         2.97   0.00309
-    ##  8 instream_cover_BC    9.18      6.21         1.48   0.140  
-    ##  9 instream_cover_BCD   9.03      5.85         1.54   0.123  
-    ## 10 instream_cover_BCDE 16.0       5.49         2.91   0.00371
-    ## # ℹ 82 more rows
+    ## # A tibble: 93 × 5
+    ##    term               estimate std.error statistic   p.value
+    ##    <chr>                 <dbl>     <dbl>     <dbl>     <dbl>
+    ##  1 (Intercept)        13.7     14.9          0.917  3.59e- 1
+    ##  2 flow               -0.00103  0.000420    -2.46   1.42e- 2
+    ##  3 turbidity           1.08     0.585        1.85   6.43e- 2
+    ##  4 temperature        -0.628    0.0937      -6.70   3.30e-11
+    ##  5 instream_cover_A    5.24    13.2          0.397  6.91e- 1
+    ##  6 instream_cover_AB  NA       NA           NA     NA       
+    ##  7 instream_cover_ABD NA       NA           NA     NA       
+    ##  8 instream_cover_AD  NA       NA           NA     NA       
+    ##  9 instream_cover_AE  24.5     18.6          1.32   1.88e- 1
+    ## 10 instream_cover_AG  NA       NA           NA     NA       
+    ## # ℹ 83 more rows
 
 ``` r
 wf_fit$fit$fit |> dotwhisker::dwplot()

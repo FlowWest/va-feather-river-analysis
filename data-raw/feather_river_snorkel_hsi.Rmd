@@ -9,7 +9,6 @@ output: github_document
 library(tidyverse)
 library(tidymodels)
 
-
 knitr::opts_chunk$set(echo = TRUE)
 
 theme_set(theme_minimal())
@@ -39,39 +38,11 @@ theme_set(theme_minimal())
 -   Mostly have data for fish presence, not absence. A lot of NAs in fish_count.
 
 ```{r}
-
-# https://github.com/SRJPE/JPE-datasets/blob/main/data-raw/qc-markdowns/seine-snorkel-data/feather-river/feather_snorkel_qc.Rmd
-cleaner_snorkel_data <- readRDS('cleaner_snorkel_data.RDS') |> 
+#https://console.cloud.google.com/storage/browser/_details/jpe-dev-bucket/juvenile-rearing[…]_object?project=jpe-development&supportedpurview=project
+cleaner_snorkel_data <- readRDS('all_snorkel_data_final.RDS') |> 
   rename(fish_count = count) |> 
   filter(!is.na(fish_count)) |> 
-  mutate(section_name = case_when(section_name == "Eye" ~ "Eye Riffle",
-                                  section_name == "Vance West" ~ "Vance Riffle",
-                                  section_name %in% c("Hatchery Side Ditch") ~ "Hatchery Ditch",
-                                  section_name == "Hatchery Side Channel" ~ "Hatchery Riffle", # TODO: check this one
-                                  section_name == "Gridley Side Channel" ~ "Gridley Riffle", # TODO: check this one
-                                  section_name %in% c("Robinson", "Lower Robinson") ~ "Robinson Riffle",
-                                  section_name == "Goose" ~ "Goose Riffle", 
-                                  section_name == "Auditorium" ~ "Auditorium Riffle",
-                                  section_name %in% c("Matthews", "Mathews", "Mathews Riffle") ~ "Matthews Riffle",
-                                  section_name %in% c("G95 Side Channel", "G95 West Side Channel", "G95 Side West", "G95 Side") ~ "G95", 
-                                  section_name %in% c("Vance West Riffle", "Vance W Riffle", "Vance East") ~ "Vance Riffle",
-                                  section_name == "Moes" ~ "Mo's Ditch",
-                                  section_name == "Aleck" ~ "Aleck Riffle",
-                                  section_name == "Lower Mcfarland" ~ "McFarland",
-                                  section_name %in% c("Bed Rock Riffle", "Bedrock", "Bedrock Park") ~ "Bedrock Park Riffle",
-                                  section_name == "Steep" ~ "Steep Riffle",
-                                  section_name %in% c("Keister", "Keister Riffle") ~ "Kiester Riffle",
-                                  section_name == "Junkyard" ~ "Junkyard Riffle",
-                                  section_name == "Gateway" ~ "Gateway Riffle",
-                                  section_name == "Trailer Park" ~ "Trailer Park Riffle",
-                                  section_name %in% c("Hatchery Ditch And Moes", "Hatchery Ditch Moes Ditch", 
-                                                      "Hatchery Side Channel Moes Ditch", 
-                                                      "Hatchery Ditch And Moes Ditch", 
-                                                      "Hatchery Side Channel And Moes Ditch", 
-                                                      "Hatchery Ditch Moes") ~ "Hatchery Ditch and Mo's Ditch", # TODO: check this one since they are separate in the map
-                                  section_name %in% c("Hatchery And Moes Side Channels", "Hatchery Side Ch Moes Side Ch", 
-                                                      "Hatchery Side Channel And Moes") ~ "Hatchery and Mo's Riffles", # TODO: check on this one 
-                                  .default = as.character(section_name))) |> 
+  mutate(date = lubridate::mdy(date)) |> 
   glimpse()
 
 high_flows <- c('Vance Riffle', 'G95', 'Kiester Riffle', 'Goose Riffle', 'Big Riffle', 'McFarland', 'Gridley Riffle', 'Junkyard Riffle')
@@ -88,7 +59,9 @@ cleaner_snorkel_data <- cleaner_snorkel_data |>
 ```{r}
 snorkel_data_dev <- cleaner_snorkel_data |> 
   select(section_name, date, fish_count, substrate, instream_cover, overhead_cover, size_class, est_size) |> 
-  mutate(substrate_unique = strsplit(substrate, ""),
+  mutate(substrate = as.character(substrate),
+         overhead_cover = as.character(overhead_cover),
+         substrate_unique = strsplit(substrate, ""),
          instream_cover_unique = strsplit(instream_cover, ""),
          overhead_cover_unique = strsplit(overhead_cover, "")) |> 
   unnest(substrate_unique) |> 
@@ -275,10 +248,9 @@ ggplot(hsi_dev_markgard_1998) +
 
 ```{r message=FALSE, warning=FALSE}
 format_snorkel_data <- cleaner_snorkel_data |> 
-  select(fish_count, flow, instream_cover, overhead_cover, substrate, temperature, turbidity, hydrology_code, water_depth_m) |> 
+  select(fish_count, flow, instream_cover, overhead_cover, substrate, temperature, turbidity, water_depth_m) |> 
   mutate(instream_cover = as.factor(instream_cover),
          overhead_cover = as.factor(overhead_cover),
-         hydrology_code = as.factor(hydrology_code),
          substrate = as.factor(substrate),
          fish_presence = as.factor(ifelse(fish_count > 0, "1", "0"))) |> # necessary for a logistic regression 
   filter(fish_count <= 50) |> # removes outliers
@@ -288,7 +260,7 @@ format_snorkel_data <- cleaner_snorkel_data |>
 
 # Define a recipe
 rec <- recipe(fish_count ~ instream_cover + overhead_cover + substrate + 
-                flow + hydrology_code + turbidity + temperature,   data = format_snorkel_data)  |> 
+                flow  + turbidity + temperature,   data = format_snorkel_data)  |> 
   step_dummy(all_nominal(), one_hot = TRUE)
 
 # Split the data into training and testing sets
@@ -349,7 +321,7 @@ ggplot(predictions, aes(x = overhead_cover, y = HSI)) +
 
 ```{r eval=FALSE, include=FALSE}
 format_snorkel_data <- cleaner_snorkel_data |> 
-  select(fish_count, flow, instream_cover, overhead_cover, substrate, temperature, turbidity, hydrology_code, water_depth_m) |> 
+  select(fish_count, flow, instream_cover, overhead_cover, substrate, temperature, turbidity, water_depth_m) |> 
   mutate(instream_cover = as.factor(instream_cover),
          overhead_cover = as.factor(overhead_cover),
          hydrology_code = as.factor(hydrology_code),
@@ -361,7 +333,7 @@ format_snorkel_data <- cleaner_snorkel_data |>
 
 # Define a recipe
 rec <- recipe(fish_presence ~ instream_cover + overhead_cover + substrate + 
-                flow + hydrology_code + turbidity + temperature,   data = format_snorkel_data)  |> 
+                flow  + turbidity + temperature,   data = format_snorkel_data)  |> 
   step_dummy(all_nominal(), one_hot = TRUE)
 
 # Split the data into training and testing sets
