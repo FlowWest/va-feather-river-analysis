@@ -1,8 +1,8 @@
 ---
 title: "Mini Snorkel Feather HSI Workflow"
-author: "Maddee Rubenson (FlowWest)"
+author: "Maddee Rubenson"
 date: "`r Sys.Date()`"
-output: html_document
+output: github_document
 editor_options: 
   markdown: 
     wrap: 72
@@ -20,9 +20,13 @@ theme_set(theme_minimal())
 
 ```{r}
 # read in mini snorkel data
-# mini_snorkel <- read_csv('../../feather-mini-snorkel/data/microhabitat_with_fish_observations.csv') |> glimpse()
+mini_snorkel <- read_csv('../../feather-mini-snorkel/data/microhabitat_with_fish_observations.csv') |>
+  mutate(count = ifelse(is.na(count), 0, count)) |> 
+  glimpse()
 
-mini_snorkel <- read_csv('https://raw.githubusercontent.com/FlowWest/feather-mini-snorkel/qc-data/data/microhabitat_with_fish_observations.csv?token=GHSAT0AAAAAACCSPYJQGEYKAVJUKVZ5IMEOZQMOPHQ') |> glimpse()
+# mini_snorkel <- read_csv('https://raw.githubusercontent.com/FlowWest/feather-mini-snorkel/qc-data/data/microhabitat_with_fish_observations.csv?token=GHSAT0AAAAAACCSPYJRVFBZ33MHJ2WM5ZX4ZQMRB5A') |> 
+#   mutate(count = ifelse(is.na(count), 0, count)) |> 
+#   glimpse()
 
 ```
 
@@ -99,8 +103,150 @@ HSC comparison
 
 mini_snorkel_model_ready <- mini_snorkel |> 
   select(depth:percent_cover_more_than_half_meter_overhead, count, channel_geomorphic_unit, species) |> 
-  mutate(fish_presence = ifelse(count < 1, 0, 1)) # fish are always present in this dataset 
+  mutate(fish_presence = as.factor(ifelse(count < 1, "0", "1")))
 
 ```
 
+# Chinook Salmon
 
+### Logistic Regression
+
+Build a logistic regression of fish presence and absence to identify
+important cover and substrate variables.
+
+**Findings**
+
+-   Substrate: most important predictor is small gravel
+
+**Questions**
+
+-   Substrate: boulder came out as NA in model. Should explore why this
+    occurred.
+
+```{r}
+# start with Chinook and substrate 
+chn_mini_snorkel <- mini_snorkel_model_ready |> 
+  filter(species == "Chinook salmon" | is.na(species)) |> 
+  select(fish_presence, percent_fine_substrate:percent_boulder_substrate)
+
+# Define a recipe
+rec <- recipe(fish_presence ~  percent_fine_substrate + percent_sand_substrate + percent_small_gravel_substrate + percent_large_gravel_substrate +
+              percent_cobble_substrate + percent_boulder_substrate, data = chn_mini_snorkel)  
+
+# Split the data into training and testing sets
+data_split <- initial_split(chn_mini_snorkel, prop = 0.8, strata = "fish_presence")
+data_train <- training(data_split)
+data_test <- testing(data_split)
+
+# Create a logistic regression model
+log_reg <- logistic_reg() |> 
+  set_engine("glm") |> 
+  set_mode("classification") |> translate()
+
+# Create a workflow
+wf <- workflow()  |> 
+  add_recipe(rec) |> 
+  add_model(log_reg)
+
+# Train the model
+wf_fit <- wf |> 
+  fit(data_train)
+
+tidy(wf_fit) # why is boulder NA? small gravel only significant predictor
+
+# Make predictions
+# predictions <- predict(wf_fit, data_test) |> 
+#   bind_cols(data_test)
+```
+
+## Adapted Mark Gard 1998 HSC process to Cover and Substrate
+
+Mark Gard's 1998 paper identified a method to developing HSC for
+presence and absence of redds in different substrate classes. I will
+follow the same methodology using fish presence/absence instead of redds
+and also apply to cover.
+
+1.  Determine number of fish with each substrate-size class
+2.  Calculate the proportion of fish with each substrate size class
+3.  Calculate the HSC value for each substrate size class by dividing
+    the proportion of fish in each substrate class by the proportion of
+    fish with the most frequent substrate class
+
+To convert from percent to discrete:
+
+-   Cover decision: 20% or greater is considered present
+
+-   Substrate decision: used same criteria as cover (for now)
+
+**Discussion**
+
+-   Sand has a stronger HSI when looking at number of fish vs.
+    presence/absence
+
+-   Presence/absence results are consistent with logistic regression
+
+```{r}
+# fish presence:
+hsi_dev_markgard_1998_fish_presence <- mini_snorkel_model_ready |> 
+  select(count, fish_presence, percent_fine_substrate:percent_boulder_substrate) |> 
+  pivot_longer(cols = c(percent_fine_substrate:percent_boulder_substrate), names_to = "substrate", values_to = "percent") |> 
+  mutate(substrate_presence = ifelse(percent >= 20, 1, 0)) |> 
+  filter(substrate_presence == 1) |> 
+  group_by(substrate) |>
+  summarise(n_fish = sum(as.numeric(fish_presence))) |> 
+  mutate(prop_fish_count = n_fish/sum(n_fish)) |> 
+  ungroup()
+
+most_freq <- hsi_dev_markgard_1998_fish_presence |> 
+  arrange(desc(n_fish)) |> 
+  slice(1) 
+
+hsi_dev_markgard_1998_fish_presence <- hsi_dev_markgard_1998_fish_presence |> 
+  mutate(hsc = prop_fish_count/most_freq$prop_fish_count)
+
+ggplot(hsi_dev_markgard_1998_fish_presence) +
+  geom_col(aes(y = hsc, x = substrate)) +
+  coord_flip()
+
+# total fish count 
+hsi_dev_markgard_1998 <- mini_snorkel_model_ready |> 
+  select(count, percent_fine_substrate:percent_boulder_substrate) |> 
+  pivot_longer(cols = c(percent_fine_substrate:percent_boulder_substrate), names_to = "substrate", values_to = "percent") |> 
+  mutate(substrate_presence = ifelse(percent >= 20, 1, 0)) |> 
+  filter(substrate_presence == 1) |> 
+  group_by(substrate) |>
+  summarise(n_fish = sum(count)) |> 
+  mutate(prop_fish_count = n_fish/sum(n_fish)) |> 
+  ungroup()
+
+most_freq <- hsi_dev_markgard_1998 |> 
+  arrange(desc(n_fish)) |> 
+  slice(1) 
+
+hsi_dev_markgard_1998 <- hsi_dev_markgard_1998 |> 
+  mutate(hsc = prop_fish_count/most_freq$prop_fish_count)
+
+ggplot(hsi_dev_markgard_1998) +
+  geom_col(aes(y = hsc, x = substrate)) +
+  coord_flip()
+```
+
+```{r}
+knitr::knit_exit()
+```
+
+### Mapping of Substrate and Cover
+
+| Mini Snorkel Data Type | Substrate Size Range (mm) | Gard 2023 Code |
+|------------------------|---------------------------|----------------|
+| fine                   | 0-0.05                    | 0.1            |
+| sand                   | 0.05-2                    | 0.1            |
+| small gravel           | 2-50                      | 1 - 1.2        |
+| large gravel           | 50-150                    | 1.3-4.6        |
+| cobble                 | 150-300                   | 6.8 - 8        |
+| boulder                | \>300                     | 9              |
+
+This mapping is a work in progress. The codes don't make a lot of sense
+and there is uncertainty on how these codes were developed. A next step
+would be to discuss the 2023 paper with Gard to get a better
+understanding of how the codes were used in his workflow.
