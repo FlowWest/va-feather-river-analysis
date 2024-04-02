@@ -1,0 +1,106 @@
+---
+title: "Mini Snorkel Feather HSI Workflow"
+author: "Maddee Rubenson (FlowWest)"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tidymodels)
+
+knitr::opts_chunk$set(echo = TRUE)
+
+theme_set(theme_minimal())
+
+```
+
+```{r}
+# read in mini snorkel data
+# mini_snorkel <- read_csv('../../feather-mini-snorkel/data/microhabitat_with_fish_observations.csv') |> glimpse()
+
+mini_snorkel <- read_csv('https://raw.githubusercontent.com/FlowWest/feather-mini-snorkel/qc-data/data/microhabitat_with_fish_observations.csv?token=GHSAT0AAAAAACCSPYJQGEYKAVJUKVZ5IMEOZQMOPHQ') |> glimpse()
+
+```
+
+## Draft Workflow
+
+[**2004a**](https://netorg629193.sharepoint.com/:b:/s/VA-FeatherRiver/EY9qLwY15ypFn3W42E02takBH745JkefSPAbS4y9VFzuBQ?e=n2QRXK)
+Data Analysis
+
+-   Stepwise binary logistic regression analysis was used to assess
+    factors influencing the occurrence of steelhead and Chinook salmon.
+    Fine scale survey results were analyzed at both the mesohabitat (100
+    m2) and microhabitat (1 m2) scale.
+
+-   Mesohabitat analysis was performed by treating the entire 25 m reach
+    as a sample
+
+-   Reach habitat variables where steelhead or salmon were present
+    (logistic response variable) were compared to reaches where fish
+    were absent (logistic reference variable)
+
+-   Microhabitat was done similarly except that individual one square
+    meter cells were considered rather than entire reaches
+
+-   Reaches lacking salmon or steelhead were not included in
+    microhabitat analysis
+
+[**2005**](https://netorg629193.sharepoint.com/:b:/s/VA-FeatherRiver/ES8H3f7ZUO5Aj7OK8hfW03UB721tCgZd_OEb8P9cbJLiMA?e=L95bf8):
+HSC development- chinook salmon rearing
+
+-   HSC were created for fry (\<50 mm) and juvenile Chinook salmon depth
+    and mean column velocity data using a three-point running mean to
+    smooth frequency distributions of the fry habitat use data and using
+    NPTL [what does this stand for?] for the juvenile habitat use data.
+
+-   all substrate suitability given value of 1 after finding that
+    substrate was not driving factor for microhabitat selection of fry
+    and juveniles
+
+-   cover modified to: with and without. Suitability of without cover
+    was calculated as the percentage of fish observed without cover to
+    the total sample size
+
+-   suitability of cover present was assigned a value of 1.0 and 0.30 or
+    0.22 for cover absent for Chinook salon fry and juveniles [I do not
+    get this... ]
+
+-   Focus on suitability of instream cover. When a cover variable did
+    not exist, preference for low velocity and shallow depth in a large
+    river indicate suitable habitat along stream margins or out in the
+    main channel when the river is nearly dry and the preferred
+    conditions are prevalent.
+
+-   intermediate scale data separated into four cover types: no cover,
+    object only cover overhead only cover, both object and overhead
+    cover
+
+[**Gard
+2023**](https://netorg629193.sharepoint.com/:b:/s/VA-FeatherRiver/EelfImRfhzxKjLQdrstbIPgBqbRV5S0Wke5GkSh06_CUrQ?e=6PdWKh) -
+HSC comparison
+
+-   Presence/absence HSC are developed using a polynomial logistic
+    regression that uses both the occupied and unoccupied data; the
+    results are then rescaled that the highest value is 1 to calculate
+    the HSI
+
+-   For depth and velocity HSC, the criteria were developed directly
+    from use observations using a range of curve fitting and smoothing
+    techniques
+
+-   Use/availability criteria are developed by dividing use
+    observations, generally binned, by availability data from transects
+
+```{r}
+
+mini_snorkel_model_ready <- mini_snorkel |> 
+  select(depth:percent_cover_more_than_half_meter_overhead, count, channel_geomorphic_unit, species) |> 
+  mutate(fish_presence = ifelse(count < 1, 0, 1)) # fish are always present in this dataset 
+
+```
+
+
