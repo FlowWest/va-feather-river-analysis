@@ -1,7 +1,7 @@
 Mini Snorkel Feather HSI Workflow
 ================
 Maddee Rubenson
-2024-04-02
+2024-04-03
 
 ``` r
 # read in mini snorkel data
@@ -180,15 +180,15 @@ tidy(wf_fit) # why is boulder NA? small gravel only significant predictor
 ```
 
     ## # A tibble: 7 × 5
-    ##   term                            estimate std.error statistic   p.value
-    ##   <chr>                              <dbl>     <dbl>     <dbl>     <dbl>
-    ## 1 (Intercept)                    -2.18       0.660     -3.30    0.000966
-    ## 2 percent_fine_substrate         -0.000375   0.00759   -0.0494  0.961   
-    ## 3 percent_sand_substrate          0.00222    0.00682    0.326   0.745   
-    ## 4 percent_small_gravel_substrate -0.0158     0.00699   -2.26    0.0236  
-    ## 5 percent_large_gravel_substrate -0.0130     0.00713   -1.82    0.0690  
-    ## 6 percent_cobble_substrate       -0.0176     0.00900   -1.95    0.0511  
-    ## 7 percent_boulder_substrate      NA         NA         NA      NA
+    ##   term                           estimate std.error statistic   p.value
+    ##   <chr>                             <dbl>     <dbl>     <dbl>     <dbl>
+    ## 1 (Intercept)                    -2.19      0.626      -3.49   0.000476
+    ## 2 percent_fine_substrate         -0.00359   0.00747    -0.481  0.631   
+    ## 3 percent_sand_substrate          0.00188   0.00650     0.289  0.772   
+    ## 4 percent_small_gravel_substrate -0.0167    0.00670    -2.49   0.0129  
+    ## 5 percent_large_gravel_substrate -0.0116    0.00674    -1.73   0.0843  
+    ## 6 percent_cobble_substrate       -0.0159    0.00860    -1.85   0.0640  
+    ## 7 percent_boulder_substrate      NA        NA          NA     NA
 
 ``` r
 # Make predictions
@@ -217,62 +217,96 @@ To convert from percent to discrete:
 
 **Discussion**
 
-- Sand has a stronger HSI when looking at number of fish vs.
-  presence/absence
+Substrate: - Sand has a stronger HSI when looking at number of fish vs.
+presence/absence
 
 - Presence/absence results are consistent with logistic regression
 
-``` r
-# fish presence:
-hsi_dev_markgard_1998_fish_presence <- mini_snorkel_model_ready |> 
-  select(count, fish_presence, percent_fine_substrate:percent_boulder_substrate) |> 
-  pivot_longer(cols = c(percent_fine_substrate:percent_boulder_substrate), names_to = "substrate", values_to = "percent") |> 
-  mutate(substrate_presence = ifelse(percent >= 20, 1, 0)) |> 
-  filter(substrate_presence == 1) |> 
-  group_by(substrate) |>
-  summarise(n_fish = sum(as.numeric(fish_presence))) |> 
-  mutate(prop_fish_count = n_fish/sum(n_fish)) |> 
-  ungroup()
-
-most_freq <- hsi_dev_markgard_1998_fish_presence |> 
-  arrange(desc(n_fish)) |> 
-  slice(1) 
-
-hsi_dev_markgard_1998_fish_presence <- hsi_dev_markgard_1998_fish_presence |> 
-  mutate(hsc = prop_fish_count/most_freq$prop_fish_count)
-
-ggplot(hsi_dev_markgard_1998_fish_presence) +
-  geom_col(aes(y = hsc, x = substrate)) +
-  coord_flip()
-```
-
-![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+Cover: - More consistent results when looking at number of fish
+vs. presence/absence
 
 ``` r
-# total fish count 
-hsi_dev_markgard_1998 <- mini_snorkel_model_ready |> 
-  select(count, percent_fine_substrate:percent_boulder_substrate) |> 
-  pivot_longer(cols = c(percent_fine_substrate:percent_boulder_substrate), names_to = "substrate", values_to = "percent") |> 
-  mutate(substrate_presence = ifelse(percent >= 20, 1, 0)) |> 
-  filter(substrate_presence == 1) |> 
-  group_by(substrate) |>
-  summarise(n_fish = sum(count)) |> 
-  mutate(prop_fish_count = n_fish/sum(n_fish)) |> 
-  ungroup()
+mark_gard_1998_hsi <- function(data, percent_presence = 20, cols = c()) {
+  data_tidy <- data |> 
+    select(count, fish_presence, cols) |> 
+    pivot_longer(cols = cols, names_to = "type", values_to = "percent") |> 
+    mutate(presence = ifelse(percent >= percent_presence, 1, 0)) |> 
+    filter(presence == 1) |> 
+    group_by(type) |>
+    summarise(n_fish_presence = sum(as.numeric(fish_presence)),
+              n_fish_total = sum(count)) |> 
+    mutate(prop_fish_presence = n_fish_presence/sum(n_fish_presence),
+           prop_fish_total = n_fish_total/sum(n_fish_total)) |> 
+    ungroup()
+  
+     most_freq_total <- data_tidy |> 
+      arrange(desc(prop_fish_total)) |> 
+      slice(1) 
+ 
+     most_freq_presence <- data_tidy |> 
+      arrange(desc(prop_fish_presence)) |> 
+      slice(1) 
+  
+  
+  data_tidy_final <- data_tidy |> 
+    mutate(hsc_presence = prop_fish_presence/most_freq_presence$prop_fish_presence,
+           hsc_total = prop_fish_total/most_freq_total$prop_fish_total)
+  
+  return(data_tidy_final)
 
-most_freq <- hsi_dev_markgard_1998 |> 
-  arrange(desc(n_fish)) |> 
-  slice(1) 
-
-hsi_dev_markgard_1998 <- hsi_dev_markgard_1998 |> 
-  mutate(hsc = prop_fish_count/most_freq$prop_fish_count)
-
-ggplot(hsi_dev_markgard_1998) +
-  geom_col(aes(y = hsc, x = substrate)) +
-  coord_flip()
+}
 ```
 
-![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-4-2.png)<!-- -->
+### Substrate
+
+``` r
+cols <- c('percent_fine_substrate', "percent_sand_substrate" , 'percent_small_gravel_substrate', 'percent_large_gravel_substrate', 'percent_cobble_substrate', 'percent_boulder_substrate')
+
+hsi_substrate <- mark_gard_1998_hsi(data = mini_snorkel_model_ready, percent_presence = 20, cols = cols)
+```
+
+    ## Warning: Using an external vector in selections was deprecated in tidyselect 1.1.0.
+    ## ℹ Please use `all_of()` or `any_of()` instead.
+    ##   # Was:
+    ##   data %>% select(cols)
+    ## 
+    ##   # Now:
+    ##   data %>% select(all_of(cols))
+    ## 
+    ## See <https://tidyselect.r-lib.org/reference/faq-external-vector.html>.
+    ## This warning is displayed once every 8 hours.
+    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+    ## generated.
+
+``` r
+hsi_substrate |> 
+  pivot_longer(cols = c(hsc_presence, hsc_total), names_to = "hsc", values_to = "values") |> 
+  ggplot() + 
+  geom_col(aes(y = values, x = type, fill = hsc), position = "dodge") +
+  coord_flip() +
+  ggtitle('Mark Gard 1998: Substrate HSI Comparison')
+```
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+
+### Cover
+
+``` r
+cols <- c('percent_no_cover_inchannel', 'percent_small_woody_cover_inchannel', 'percent_large_woody_cover_inchannel', 
+          'percent_submerged_aquatic_veg_inchannel', 'percent_undercut_bank', 'percent_no_cover_overhead', 'percent_cover_half_meter_overhead',
+          'percent_cover_more_than_half_meter_overhead')
+
+hsi_cover <- mark_gard_1998_hsi(data = mini_snorkel_model_ready, percent_presence = 20, cols = cols)
+
+hsi_cover |> 
+  pivot_longer(cols = c(hsc_presence, hsc_total), names_to = "hsc", values_to = "values") |> 
+  ggplot() + 
+  geom_col(aes(y = values, x = type, fill = hsc), position = "dodge") +
+  coord_flip() +
+  ggtitle('Mark Gard 1998: Cover HSI Comparison')
+```
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
 
 ``` r
 knitr::knit_exit()
