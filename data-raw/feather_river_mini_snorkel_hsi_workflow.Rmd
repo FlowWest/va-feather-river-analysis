@@ -109,6 +109,24 @@ mini_snorkel_model_ready <- mini_snorkel |>
 
 # Chinook Salmon
 
+### Explore Variables
+
+Specifically looking for collinearity in the variables
+```{r}
+chn_mini_snorkel_substrate <- mini_snorkel_model_ready |> 
+  filter(species == "Chinook salmon" | is.na(species)) |> 
+  select(fish_presence, percent_fine_substrate:percent_boulder_substrate) 
+
+cor_matrix <- cor(chn_mini_snorkel_substrate |> select(-fish_presence))
+
+print(cor_matrix)
+
+heatmap(cor_matrix, 
+        col = colorRampPalette(c("blue", "white", "red"))(20),
+        symm = TRUE,
+        margins = c(10, 10))
+```
+
 ### Logistic Regression
 
 Build a logistic regression of fish presence and absence to identify
@@ -117,21 +135,25 @@ important cover and substrate variables.
 **Findings**
 
 -   Substrate: most important predictor is small gravel
+-   Cover: all predictors (aside from the two NAs and `percent_cover_half_meter_overhead`) were significant. `percent_no_cover_overhead` was most significant. 
 
 **Questions**
 
 -   Substrate: boulder came out as NA in model. Should explore why this
     occurred.
+-   Cover: `percent_undercut_bank` and `percent_cover_more_than_half_meter_overhead` came back as NA. Need to explore. 
 
+#### Substrate Logistic Regression
 ```{r}
+set.seed(06221988)
+
 # start with Chinook and substrate 
 chn_mini_snorkel <- mini_snorkel_model_ready |> 
   filter(species == "Chinook salmon" | is.na(species)) |> 
-  select(fish_presence, percent_fine_substrate:percent_boulder_substrate)
+  select(fish_presence, percent_fine_substrate:percent_boulder_substrate) 
 
 # Define a recipe
-rec <- recipe(fish_presence ~  percent_fine_substrate + percent_sand_substrate + percent_small_gravel_substrate + percent_large_gravel_substrate +
-              percent_cobble_substrate + percent_boulder_substrate, data = chn_mini_snorkel)  
+rec <- recipe(fish_presence ~  percent_fine_substrate + percent_sand_substrate + percent_small_gravel_substrate + percent_large_gravel_substrate + percent_boulder_substrate + percent_cobble_substrate, data = chn_mini_snorkel)  
 
 # Split the data into training and testing sets
 data_split <- initial_split(chn_mini_snorkel, prop = 0.8, strata = "fish_presence")
@@ -153,17 +175,56 @@ wf_fit <- wf |>
   fit(data_train)
 
 tidy(wf_fit) # why is boulder NA? small gravel only significant predictor
+glance(wf_fit)
 
 # Make predictions
-# predictions <- predict(wf_fit, data_test) |> 
+predictions <- predict(wf_fit, data_test) |>
+  bind_cols(data_test)
+```
+
+
+#### Cover Logistic Regression
+```{r}
+# start with Chinook and substrate 
+chn_mini_snorkel <- mini_snorkel_model_ready |> 
+  filter(species == "Chinook salmon" | is.na(species)) |> 
+  select(fish_presence, percent_no_cover_inchannel:percent_cover_more_than_half_meter_overhead) |> 
+  na.omit() 
+
+# Define a recipe
+rec <- recipe(fish_presence ~  percent_no_cover_inchannel + percent_small_woody_cover_inchannel + percent_large_woody_cover_inchannel + percent_submerged_aquatic_veg_inchannel + percent_undercut_bank + percent_no_cover_overhead + percent_cover_half_meter_overhead + percent_cover_more_than_half_meter_overhead, data = chn_mini_snorkel)  
+
+# Split the data into training and testing sets
+data_split <- initial_split(chn_mini_snorkel, prop = 0.8, strata = "fish_presence")
+data_train <- training(data_split)
+data_test <- testing(data_split)
+
+# Create a logistic regression model
+log_reg <- logistic_reg() |> 
+  set_engine("glm") |> 
+  set_mode("classification") |> translate()
+
+# Create a workflow
+wf <- workflow()  |> 
+  add_recipe(rec) |> 
+  add_model(log_reg)
+
+# Train the model
+wf_fit <- wf |> 
+  fit(data_train)
+
+tidy(wf_fit) # 
+
+# Make predictions
+# predictions <- predict(wf_fit, data_test) |>
 #   bind_cols(data_test)
 ```
 
-## Adapted Mark Gard 1998 HSC process to Cover and Substrate
+### Adapted Mark Gard 1998 HSC process to Cover and Substrate
 
 Mark Gard's 1998 paper identified a method to developing HSC for
 presence and absence of redds in different substrate classes. I will
-follow the same methodology using fish presence/absence instead of redds
+follow the same methodology using fish presence/absence and total fish count instead of redds
 and also apply to cover.
 
 1.  Determine number of fish with each substrate-size class
@@ -221,7 +282,7 @@ mark_gard_1998_hsi <- function(data, percent_presence = 20, cols = c()) {
 }
 ```
 
-### Substrate
+#### Substrate
 
 ```{r}
 cols <- c('percent_fine_substrate', "percent_sand_substrate" , 'percent_small_gravel_substrate', 'percent_large_gravel_substrate', 'percent_cobble_substrate', 'percent_boulder_substrate')
@@ -237,7 +298,7 @@ hsi_substrate |>
 
 ```
 
-### Cover
+#### Cover
 
 ```{r}
 cols <- c('percent_no_cover_inchannel', 'percent_small_woody_cover_inchannel', 'percent_large_woody_cover_inchannel', 
@@ -253,6 +314,24 @@ hsi_cover |>
   coord_flip() +
   ggtitle('Mark Gard 1998: Cover HSI Comparison')
 ```
+## Velocity and Depth 
+
+```{r eval=FALSE, include=FALSE}
+
+ggplot(mini_snorkel_model_ready) + 
+  geom_point(aes(x = count, y = velocity)) 
+
+ggplot(mini_snorkel_model_ready) + 
+  geom_boxplot(aes(x = fish_presence, y = velocity)) 
+
+ggplot(mini_snorkel_model_ready) + 
+  geom_point(aes(x = count, y = depth)) 
+
+ggplot(mini_snorkel_model_ready) + 
+  geom_boxplot(aes(x = fish_presence, y = depth)) 
+
+```
+
 
 ```{r}
 knitr::knit_exit()
@@ -273,3 +352,79 @@ This mapping is a work in progress. The codes don't make a lot of sense
 and there is uncertainty on how these codes were developed. A next step
 would be to discuss the 2023 paper with Gard to get a better
 understanding of how the codes were used in his workflow.
+
+```{r}
+# testing stepwise logistic regression - non-functional
+
+# start with Chinook and substrate 
+chn_mini_snorkel <- mini_snorkel_model_ready |> 
+  filter(species == "Chinook salmon" | is.na(species)) |> 
+  select(fish_presence, percent_fine_substrate:percent_boulder_substrate) 
+
+# Define a recipe
+rec <- recipe(fish_presence ~  percent_fine_substrate + percent_sand_substrate + percent_small_gravel_substrate + percent_large_gravel_substrate + percent_boulder_substrate + percent_cobble_substrate, data = chn_mini_snorkel)  |> 
+  step_normalize(all_predictors())
+
+# Split the data into training and testing sets
+data_split <- initial_split(chn_mini_snorkel, prop = 0.8, strata = "fish_presence")
+data_train <- training(data_split)
+data_test <- testing(data_split)
+
+# Create a logistic regression model
+log_reg <- logistic_reg() |> 
+  set_engine("glm") |> 
+  set_mode("classification") |> translate()
+
+# Create a workflow
+wf <- workflow()  |> 
+  add_recipe(rec) |> 
+  add_model(log_reg)
+
+stepwise_mod <- wf |> 
+  stats::step()
+```
+
+```{r}
+# testing with a fake dataset to figure out NA issues 
+
+set.seed(06221988)
+
+generate_data <- function(n) {
+  return(runif(n, min = 0, max = 100))
+}
+
+# create fake dataset
+data <- data.frame("fish_presence" = rep(c(0,1), 2400),
+                   "percent_fine_substrate" = generate_data(100),
+                   "percent_sand_substrate" = generate_data(100),
+                   "percent_small_gravel_substrate" = generate_data(100),
+                   "percent_large_gravel_substrate" = generate_data(100),
+                   "percent_cobble_substrate" = generate_data(100), 
+                   "percent_boulder_substrate" = generate_data(100)) |> 
+  mutate(fish_presence = as.factor(fish_presence))
+
+# Define a recipe
+rec <- recipe(fish_presence ~  percent_fine_substrate + percent_sand_substrate + percent_small_gravel_substrate + percent_large_gravel_substrate + percent_boulder_substrate + percent_cobble_substrate, data = data)  
+
+# Split the data into training and testing sets
+data_split <- initial_split(data, prop = 0.8, strata = "fish_presence")
+data_train <- training(data_split)
+data_test <- testing(data_split)
+
+# Create a logistic regression model
+log_reg <- logistic_reg() |> 
+  set_engine("glm") |> 
+  set_mode("classification") |> translate()
+
+# Create a workflow
+wf <- workflow()  |> 
+  add_recipe(rec) |> 
+  add_model(log_reg)
+
+# Train the model
+wf_fit <- wf |> 
+  fit(data_train)
+
+tidy(wf_fit) 
+
+```

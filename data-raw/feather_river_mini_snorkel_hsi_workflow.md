@@ -1,7 +1,7 @@
 Mini Snorkel Feather HSI Workflow
 ================
 Maddee Rubenson
-2024-04-03
+2024-04-04
 
 ``` r
 # read in mini snorkel data
@@ -133,6 +133,65 @@ mini_snorkel_model_ready <- mini_snorkel |>
 
 # Chinook Salmon
 
+### Explore Variables
+
+Specifically looking for collinearity in the variables
+
+``` r
+chn_mini_snorkel_substrate <- mini_snorkel_model_ready |> 
+  filter(species == "Chinook salmon" | is.na(species)) |> 
+  select(fish_presence, percent_fine_substrate:percent_boulder_substrate) 
+
+cor_matrix <- cor(chn_mini_snorkel_substrate |> select(-fish_presence))
+
+print(cor_matrix)
+```
+
+    ##                                percent_fine_substrate percent_sand_substrate
+    ## percent_fine_substrate                     1.00000000            -0.04435118
+    ## percent_sand_substrate                    -0.04435118             1.00000000
+    ## percent_small_gravel_substrate            -0.17186508            -0.30474352
+    ## percent_large_gravel_substrate            -0.18275391            -0.43339353
+    ## percent_cobble_substrate                  -0.10849584            -0.26288062
+    ## percent_boulder_substrate                 -0.05829675            -0.12077048
+    ##                                percent_small_gravel_substrate
+    ## percent_fine_substrate                             -0.1718651
+    ## percent_sand_substrate                             -0.3047435
+    ## percent_small_gravel_substrate                      1.0000000
+    ## percent_large_gravel_substrate                     -0.3351311
+    ## percent_cobble_substrate                           -0.3955015
+    ## percent_boulder_substrate                          -0.2279385
+    ##                                percent_large_gravel_substrate
+    ## percent_fine_substrate                            -0.18275391
+    ## percent_sand_substrate                            -0.43339353
+    ## percent_small_gravel_substrate                    -0.33513107
+    ## percent_large_gravel_substrate                     1.00000000
+    ## percent_cobble_substrate                          -0.04373516
+    ## percent_boulder_substrate                         -0.12013439
+    ##                                percent_cobble_substrate
+    ## percent_fine_substrate                      -0.10849584
+    ## percent_sand_substrate                      -0.26288062
+    ## percent_small_gravel_substrate              -0.39550146
+    ## percent_large_gravel_substrate              -0.04373516
+    ## percent_cobble_substrate                     1.00000000
+    ## percent_boulder_substrate                    0.20302349
+    ##                                percent_boulder_substrate
+    ## percent_fine_substrate                       -0.05829675
+    ## percent_sand_substrate                       -0.12077048
+    ## percent_small_gravel_substrate               -0.22793850
+    ## percent_large_gravel_substrate               -0.12013439
+    ## percent_cobble_substrate                      0.20302349
+    ## percent_boulder_substrate                     1.00000000
+
+``` r
+heatmap(cor_matrix, 
+        col = colorRampPalette(c("blue", "white", "red"))(20),
+        symm = TRUE,
+        margins = c(10, 10))
+```
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
+
 ### Logistic Regression
 
 Build a logistic regression of fish presence and absence to identify
@@ -141,21 +200,30 @@ important cover and substrate variables.
 **Findings**
 
 - Substrate: most important predictor is small gravel
+- Cover: all predictors (aside from the two NAs and
+  `percent_cover_half_meter_overhead`) were significant.
+  `percent_no_cover_overhead` was most significant.
 
 **Questions**
 
 - Substrate: boulder came out as NA in model. Should explore why this
   occurred.
+- Cover: `percent_undercut_bank` and
+  `percent_cover_more_than_half_meter_overhead` came back as NA. Need to
+  explore.
+
+#### Substrate Logistic Regression
 
 ``` r
+set.seed(06221988)
+
 # start with Chinook and substrate 
 chn_mini_snorkel <- mini_snorkel_model_ready |> 
   filter(species == "Chinook salmon" | is.na(species)) |> 
-  select(fish_presence, percent_fine_substrate:percent_boulder_substrate)
+  select(fish_presence, percent_fine_substrate:percent_boulder_substrate) 
 
 # Define a recipe
-rec <- recipe(fish_presence ~  percent_fine_substrate + percent_sand_substrate + percent_small_gravel_substrate + percent_large_gravel_substrate +
-              percent_cobble_substrate + percent_boulder_substrate, data = chn_mini_snorkel)  
+rec <- recipe(fish_presence ~  percent_fine_substrate + percent_sand_substrate + percent_small_gravel_substrate + percent_large_gravel_substrate + percent_boulder_substrate + percent_cobble_substrate, data = chn_mini_snorkel)  
 
 # Split the data into training and testing sets
 data_split <- initial_split(chn_mini_snorkel, prop = 0.8, strata = "fish_presence")
@@ -180,28 +248,93 @@ tidy(wf_fit) # why is boulder NA? small gravel only significant predictor
 ```
 
     ## # A tibble: 7 × 5
-    ##   term                           estimate std.error statistic   p.value
-    ##   <chr>                             <dbl>     <dbl>     <dbl>     <dbl>
-    ## 1 (Intercept)                    -2.19      0.626      -3.49   0.000476
-    ## 2 percent_fine_substrate         -0.00359   0.00747    -0.481  0.631   
-    ## 3 percent_sand_substrate          0.00188   0.00650     0.289  0.772   
-    ## 4 percent_small_gravel_substrate -0.0167    0.00670    -2.49   0.0129  
-    ## 5 percent_large_gravel_substrate -0.0116    0.00674    -1.73   0.0843  
-    ## 6 percent_cobble_substrate       -0.0159    0.00860    -1.85   0.0640  
-    ## 7 percent_boulder_substrate      NA        NA          NA     NA
+    ##   term                             estimate std.error statistic   p.value
+    ##   <chr>                               <dbl>     <dbl>     <dbl>     <dbl>
+    ## 1 (Intercept)                    -3.39        0.390    -8.68     3.98e-18
+    ## 2 percent_fine_substrate          0.0116      0.00543   2.13     3.29e- 2
+    ## 3 percent_sand_substrate          0.0141      0.00428   3.29     1.01e- 3
+    ## 4 percent_small_gravel_substrate -0.00593     0.00464  -1.28     2.01e- 1
+    ## 5 percent_large_gravel_substrate  0.0000212   0.00526   0.00404  9.97e- 1
+    ## 6 percent_boulder_substrate       0.00722     0.00864   0.836    4.03e- 1
+    ## 7 percent_cobble_substrate       NA          NA        NA       NA
+
+``` r
+glance(wf_fit)
+```
+
+    ## # A tibble: 1 × 8
+    ##   null.deviance df.null logLik   AIC   BIC deviance df.residual  nobs
+    ##           <dbl>   <int>  <dbl> <dbl> <dbl>    <dbl>       <int> <int>
+    ## 1         1345.    3871  -643. 1299. 1336.    1287.        3866  3872
 
 ``` r
 # Make predictions
-# predictions <- predict(wf_fit, data_test) |> 
+predictions <- predict(wf_fit, data_test) |>
+  bind_cols(data_test)
+```
+
+    ## Warning in predict.lm(object, newdata, se.fit, scale = 1, type = if (type == :
+    ## prediction from a rank-deficient fit may be misleading
+
+#### Cover Logistic Regression
+
+``` r
+# start with Chinook and substrate 
+chn_mini_snorkel <- mini_snorkel_model_ready |> 
+  filter(species == "Chinook salmon" | is.na(species)) |> 
+  select(fish_presence, percent_no_cover_inchannel:percent_cover_more_than_half_meter_overhead) |> 
+  na.omit() 
+
+# Define a recipe
+rec <- recipe(fish_presence ~  percent_no_cover_inchannel + percent_small_woody_cover_inchannel + percent_large_woody_cover_inchannel + percent_submerged_aquatic_veg_inchannel + percent_undercut_bank + percent_no_cover_overhead + percent_cover_half_meter_overhead + percent_cover_more_than_half_meter_overhead, data = chn_mini_snorkel)  
+
+# Split the data into training and testing sets
+data_split <- initial_split(chn_mini_snorkel, prop = 0.8, strata = "fish_presence")
+data_train <- training(data_split)
+data_test <- testing(data_split)
+
+# Create a logistic regression model
+log_reg <- logistic_reg() |> 
+  set_engine("glm") |> 
+  set_mode("classification") |> translate()
+
+# Create a workflow
+wf <- workflow()  |> 
+  add_recipe(rec) |> 
+  add_model(log_reg)
+
+# Train the model
+wf_fit <- wf |> 
+  fit(data_train)
+
+tidy(wf_fit) # 
+```
+
+    ## # A tibble: 9 × 5
+    ##   term                                     estimate std.error statistic  p.value
+    ##   <chr>                                       <dbl>     <dbl>     <dbl>    <dbl>
+    ## 1 (Intercept)                               5.50      1.83         3.00  2.66e-3
+    ## 2 percent_no_cover_inchannel               -0.0732    0.0185      -3.95  7.70e-5
+    ## 3 percent_small_woody_cover_inchannel      -0.0474    0.0187      -2.54  1.11e-2
+    ## 4 percent_large_woody_cover_inchannel      -0.0565    0.0236      -2.39  1.69e-2
+    ## 5 percent_submerged_aquatic_veg_inchannel  -0.0815    0.0190      -4.30  1.69e-5
+    ## 6 percent_undercut_bank                    NA        NA           NA    NA      
+    ## 7 percent_no_cover_overhead                -0.0156    0.00306     -5.08  3.68e-7
+    ## 8 percent_cover_half_meter_overhead        -0.00849   0.00580     -1.46  1.43e-1
+    ## 9 percent_cover_more_than_half_meter_over… NA        NA           NA    NA
+
+``` r
+# Make predictions
+# predictions <- predict(wf_fit, data_test) |>
 #   bind_cols(data_test)
 ```
 
-## Adapted Mark Gard 1998 HSC process to Cover and Substrate
+### Adapted Mark Gard 1998 HSC process to Cover and Substrate
 
 Mark Gard’s 1998 paper identified a method to developing HSC for
 presence and absence of redds in different substrate classes. I will
-follow the same methodology using fish presence/absence instead of redds
-and also apply to cover.
+follow the same methodology using fish presence/absence and total fish
+count instead of redds and also apply to cover.
 
 1.  Determine number of fish with each substrate-size class
 2.  Calculate the proportion of fish with each substrate size class
@@ -257,7 +390,7 @@ mark_gard_1998_hsi <- function(data, percent_presence = 20, cols = c()) {
 }
 ```
 
-### Substrate
+#### Substrate
 
 ``` r
 cols <- c('percent_fine_substrate', "percent_sand_substrate" , 'percent_small_gravel_substrate', 'percent_large_gravel_substrate', 'percent_cobble_substrate', 'percent_boulder_substrate')
@@ -287,9 +420,9 @@ hsi_substrate |>
   ggtitle('Mark Gard 1998: Substrate HSI Comparison')
 ```
 
-![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
-### Cover
+#### Cover
 
 ``` r
 cols <- c('percent_no_cover_inchannel', 'percent_small_woody_cover_inchannel', 'percent_large_woody_cover_inchannel', 
@@ -306,7 +439,8 @@ hsi_cover |>
   ggtitle('Mark Gard 1998: Cover HSI Comparison')
 ```
 
-![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+\## Velocity and Depth
 
 ``` r
 knitr::knit_exit()
