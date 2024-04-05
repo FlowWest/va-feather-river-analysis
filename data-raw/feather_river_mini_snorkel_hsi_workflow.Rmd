@@ -300,6 +300,11 @@ hsi_substrate |>
 
 #### Cover
 
+TODO: treat instream and overhanging as different cover types
+TODO: explore no cover more - do we want to use this? how? need to change percentage 
+
+Need a summary of the habitat conditions that were surveyed
+
 ```{r}
 cols <- c('percent_no_cover_inchannel', 'percent_small_woody_cover_inchannel', 'percent_large_woody_cover_inchannel', 
           'percent_submerged_aquatic_veg_inchannel', 'percent_undercut_bank', 'percent_no_cover_overhead', 'percent_cover_half_meter_overhead',
@@ -314,9 +319,10 @@ hsi_cover |>
   coord_flip() +
   ggtitle('Mark Gard 1998: Cover HSI Comparison')
 ```
+
 ## Velocity and Depth 
 
-```{r eval=FALSE, include=FALSE}
+```{r echo=TRUE}
 
 ggplot(mini_snorkel_model_ready) + 
   geom_point(aes(x = count, y = velocity)) 
@@ -329,6 +335,73 @@ ggplot(mini_snorkel_model_ready) +
 
 ggplot(mini_snorkel_model_ready) + 
   geom_boxplot(aes(x = fish_presence, y = depth)) 
+
+```
+### Adapted Mark Gard 2023 HSC approach for Velocity and Depth
+
+#### Approach 1: Criteria from use observations using curve fitting 
+
+```{r}
+lm_data <- mini_snorkel_model_ready |> 
+  select(count, depth, velocity) |> 
+  na.omit()
+
+fit <- lm(count ~ poly(depth, 3) + poly(velocity, 3) , data = lm_data)
+hsi_values <- predict(fit, type = "response")
+lm_data$hsi_values <- hsi_values
+
+tidy(fit)
+
+lm_data %>%
+  ggplot(aes(x = depth, y = count)) +
+  geom_point() +
+  geom_smooth(aes(x = depth, y = hsi_values), method = "lm", color = "blue") +
+  labs(x = "Depth", y = "Fish Count") +
+  theme_minimal()
+
+lm_data %>%
+  ggplot(aes(x = velocity, y = count)) +
+  geom_point() +
+  geom_smooth(aes(x = velocity, y = hsi_values), method = "lm", color = "blue") +
+  labs(x = "Velocity", y = "Fish Count") +
+  theme_minimal()
+```
+
+#### Approach 2: Use/Availability criteria from binned data
+Use/availability criteria are developed by dividing use observations, generally binned, by availability data from transects. 
+
+```{r}
+approach_2 <- mini_snorkel_model_ready |> 
+  select(count, fish_presence, depth, velocity) |> 
+  na.omit()
+
+```
+
+
+#### Approach 3: Presence/absence HSC using logistic regression
+
+```{r}
+
+log_reg_data <- mini_snorkel_model_ready |> 
+  select(fish_presence, depth, velocity) |> 
+  na.omit()
+
+# Fit polynomial logistic regression model
+model <- glm(fish_presence ~ poly(depth, 2) + poly(velocity, 2), data = log_reg_data, family = binomial)
+
+tidy(model)
+
+# Calculate HSI values
+hsi_values <- predict(model, type = "response")
+log_reg_data$hsi_values <- hsi_values
+
+ggplot(log_reg_data) + 
+  geom_point(aes(x = depth, y = hsi_values)) + 
+  geom_smooth(aes(x = depth, y = hsi_values), method = "loess", color = "blue") 
+
+ggplot(log_reg_data) + 
+  geom_point(aes(x = velocity, y = hsi_values)) + 
+  geom_smooth(aes(x = velocity, y = hsi_values), method = "loess", color = "blue") 
 
 ```
 
@@ -428,3 +501,4 @@ wf_fit <- wf |>
 tidy(wf_fit) 
 
 ```
+

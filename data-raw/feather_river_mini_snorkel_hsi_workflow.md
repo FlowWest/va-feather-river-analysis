@@ -424,6 +424,12 @@ hsi_substrate |>
 
 #### Cover
 
+TODO: treat instream and overhanging as different cover types TODO:
+explore no cover more - do we want to use this? how? need to change
+percentage
+
+Need a summary of the habitat conditions that were surveyed
+
 ``` r
 cols <- c('percent_no_cover_inchannel', 'percent_small_woody_cover_inchannel', 'percent_large_woody_cover_inchannel', 
           'percent_submerged_aquatic_veg_inchannel', 'percent_undercut_bank', 'percent_no_cover_overhead', 'percent_cover_half_meter_overhead',
@@ -440,7 +446,149 @@ hsi_cover |>
 ```
 
 ![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
-\## Velocity and Depth
+
+## Velocity and Depth
+
+``` r
+ggplot(mini_snorkel_model_ready) + 
+  geom_point(aes(x = count, y = velocity)) 
+```
+
+    ## Warning: Removed 80 rows containing missing values (`geom_point()`).
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+
+``` r
+ggplot(mini_snorkel_model_ready) + 
+  geom_boxplot(aes(x = fish_presence, y = velocity)) 
+```
+
+    ## Warning: Removed 80 rows containing non-finite values (`stat_boxplot()`).
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-9-2.png)<!-- -->
+
+``` r
+ggplot(mini_snorkel_model_ready) + 
+  geom_point(aes(x = count, y = depth)) 
+```
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-9-3.png)<!-- -->
+
+``` r
+ggplot(mini_snorkel_model_ready) + 
+  geom_boxplot(aes(x = fish_presence, y = depth)) 
+```
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-9-4.png)<!-- -->
+\### Adapted Mark Gard 2023 HSC approach for Velocity and Depth
+
+#### Approach 1: Criteria from use observations using curve fitting
+
+``` r
+lm_data <- mini_snorkel_model_ready |> 
+  select(count, depth, velocity) |> 
+  na.omit()
+
+fit <- lm(count ~ poly(depth, 3) + poly(velocity, 3) , data = lm_data)
+hsi_values <- predict(fit, type = "response")
+lm_data$hsi_values <- hsi_values
+
+tidy(fit)
+```
+
+    ## # A tibble: 7 × 5
+    ##   term               estimate std.error statistic  p.value
+    ##   <chr>                 <dbl>     <dbl>     <dbl>    <dbl>
+    ## 1 (Intercept)           3.90      0.633    6.16   7.97e-10
+    ## 2 poly(depth, 3)1     205.       46.0      4.46   8.20e- 6
+    ## 3 poly(depth, 3)2      57.3      44.9      1.27   2.03e- 1
+    ## 4 poly(depth, 3)3     106.       44.6      2.38   1.75e- 2
+    ## 5 poly(velocity, 3)1 -122.       45.9     -2.66   7.82e- 3
+    ## 6 poly(velocity, 3)2   -0.741    44.7     -0.0166 9.87e- 1
+    ## 7 poly(velocity, 3)3   37.3      44.9      0.830  4.07e- 1
+
+``` r
+lm_data %>%
+  ggplot(aes(x = depth, y = count)) +
+  geom_point() +
+  geom_smooth(aes(x = depth, y = hsi_values), method = "lm", color = "blue") +
+  labs(x = "Depth", y = "Fish Count") +
+  theme_minimal()
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+
+``` r
+lm_data %>%
+  ggplot(aes(x = velocity, y = count)) +
+  geom_point() +
+  geom_smooth(aes(x = velocity, y = hsi_values), method = "lm", color = "blue") +
+  labs(x = "Velocity", y = "Fish Count") +
+  theme_minimal()
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-10-2.png)<!-- -->
+
+#### Approach 2: Use/Availability criteria from binned data
+
+Use/availability criteria are developed by dividing use observations,
+generally binned, by availability data from transects.
+
+``` r
+approach_2 <- mini_snorkel_model_ready |> 
+  select(count, fish_presence, depth, velocity) |> 
+  na.omit()
+```
+
+#### Approach 3: Presence/absence HSC using logistic regression
+
+``` r
+log_reg_data <- mini_snorkel_model_ready |> 
+  select(fish_presence, depth, velocity) |> 
+  na.omit()
+
+# Fit polynomial logistic regression model
+model <- glm(fish_presence ~ poly(depth, 2) + poly(velocity, 2), data = log_reg_data, family = binomial)
+
+tidy(model)
+```
+
+    ## # A tibble: 5 × 5
+    ##   term               estimate std.error statistic p.value
+    ##   <chr>                 <dbl>     <dbl>     <dbl>   <dbl>
+    ## 1 (Intercept)           -2.53    0.0547   -46.2   0      
+    ## 2 poly(depth, 2)1       -1.28    3.72      -0.343 0.731  
+    ## 3 poly(depth, 2)2        8.03    2.77       2.90  0.00376
+    ## 4 poly(velocity, 2)1    -5.15    4.51      -1.14  0.253  
+    ## 5 poly(velocity, 2)2    -6.46    5.18      -1.25  0.212
+
+``` r
+# Calculate HSI values
+hsi_values <- predict(model, type = "response")
+log_reg_data$hsi_values <- hsi_values
+
+ggplot(log_reg_data) + 
+  geom_point(aes(x = depth, y = hsi_values)) + 
+  geom_smooth(aes(x = depth, y = hsi_values), method = "loess", color = "blue") 
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
+
+``` r
+ggplot(log_reg_data) + 
+  geom_point(aes(x = velocity, y = hsi_values)) + 
+  geom_smooth(aes(x = velocity, y = hsi_values), method = "loess", color = "blue") 
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-12-2.png)<!-- -->
 
 ``` r
 knitr::knit_exit()
