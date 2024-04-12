@@ -1,7 +1,7 @@
 Mini Snorkel Feather HSI Workflow
 ================
 Maddee Rubenson
-2024-04-04
+2024-04-12
 
 ``` r
 # read in mini snorkel data
@@ -57,7 +57,7 @@ mini_snorkel <- read_csv('../../feather-mini-snorkel/data/microhabitat_with_fish
 #   glimpse()
 ```
 
-## Draft Workflow
+## Literature Notes
 
 [**2004a**](https://netorg629193.sharepoint.com/:b:/s/VA-FeatherRiver/EY9qLwY15ypFn3W42E02takBH745JkefSPAbS4y9VFzuBQ?e=n2QRXK)
 Data Analysis
@@ -136,61 +136,6 @@ mini_snorkel_model_ready <- mini_snorkel |>
 ### Explore Variables
 
 Specifically looking for collinearity in the variables
-
-``` r
-chn_mini_snorkel_substrate <- mini_snorkel_model_ready |> 
-  filter(species == "Chinook salmon" | is.na(species)) |> 
-  select(fish_presence, percent_fine_substrate:percent_boulder_substrate) 
-
-cor_matrix <- cor(chn_mini_snorkel_substrate |> select(-fish_presence))
-
-print(cor_matrix)
-```
-
-    ##                                percent_fine_substrate percent_sand_substrate
-    ## percent_fine_substrate                     1.00000000            -0.04435118
-    ## percent_sand_substrate                    -0.04435118             1.00000000
-    ## percent_small_gravel_substrate            -0.17186508            -0.30474352
-    ## percent_large_gravel_substrate            -0.18275391            -0.43339353
-    ## percent_cobble_substrate                  -0.10849584            -0.26288062
-    ## percent_boulder_substrate                 -0.05829675            -0.12077048
-    ##                                percent_small_gravel_substrate
-    ## percent_fine_substrate                             -0.1718651
-    ## percent_sand_substrate                             -0.3047435
-    ## percent_small_gravel_substrate                      1.0000000
-    ## percent_large_gravel_substrate                     -0.3351311
-    ## percent_cobble_substrate                           -0.3955015
-    ## percent_boulder_substrate                          -0.2279385
-    ##                                percent_large_gravel_substrate
-    ## percent_fine_substrate                            -0.18275391
-    ## percent_sand_substrate                            -0.43339353
-    ## percent_small_gravel_substrate                    -0.33513107
-    ## percent_large_gravel_substrate                     1.00000000
-    ## percent_cobble_substrate                          -0.04373516
-    ## percent_boulder_substrate                         -0.12013439
-    ##                                percent_cobble_substrate
-    ## percent_fine_substrate                      -0.10849584
-    ## percent_sand_substrate                      -0.26288062
-    ## percent_small_gravel_substrate              -0.39550146
-    ## percent_large_gravel_substrate              -0.04373516
-    ## percent_cobble_substrate                     1.00000000
-    ## percent_boulder_substrate                    0.20302349
-    ##                                percent_boulder_substrate
-    ## percent_fine_substrate                       -0.05829675
-    ## percent_sand_substrate                       -0.12077048
-    ## percent_small_gravel_substrate               -0.22793850
-    ## percent_large_gravel_substrate               -0.12013439
-    ## percent_cobble_substrate                      0.20302349
-    ## percent_boulder_substrate                     1.00000000
-
-``` r
-heatmap(cor_matrix, 
-        col = colorRampPalette(c("blue", "white", "red"))(20),
-        symm = TRUE,
-        margins = c(10, 10))
-```
-
-![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
 
 ### Logistic Regression
 
@@ -350,13 +295,17 @@ To convert from percent to discrete:
 
 **Discussion**
 
-Substrate: - Sand has a stronger HSI when looking at number of fish vs.
-presence/absence
+Substrate:
+
+- Sand has a stronger HSI when looking at number of fish vs.
+  presence/absence
 
 - Presence/absence results are consistent with logistic regression
 
-Cover: - More consistent results when looking at number of fish
-vs. presence/absence
+Cover:
+
+- More consistent results when looking at number of fish vs.
+  presence/absence
 
 ``` r
 mark_gard_1998_hsi <- function(data, percent_presence = 20, cols = c()) {
@@ -424,63 +373,50 @@ hsi_substrate |>
 
 #### Cover
 
-TODO: treat instream and overhanging as different cover types TODO:
-explore no cover more - do we want to use this? how? need to change
-percentage
+**Notes**
 
-Need a summary of the habitat conditions that were surveyed
+- Removed no cover variables
+
+- Created two cover HSIs: in-channel and overhead
 
 ``` r
-cols <- c('percent_no_cover_inchannel', 'percent_small_woody_cover_inchannel', 'percent_large_woody_cover_inchannel', 
-          'percent_submerged_aquatic_veg_inchannel', 'percent_undercut_bank', 'percent_no_cover_overhead', 'percent_cover_half_meter_overhead',
-          'percent_cover_more_than_half_meter_overhead')
+cols_inchannel <- c('percent_small_woody_cover_inchannel', 'percent_large_woody_cover_inchannel', 
+          'percent_submerged_aquatic_veg_inchannel', 'percent_undercut_bank') #'percent_no_cover_inchannel'
 
-hsi_cover <- mark_gard_1998_hsi(data = mini_snorkel_model_ready, percent_presence = 20, cols = cols)
+cols_overhead <- c('percent_cover_half_meter_overhead',
+          'percent_cover_more_than_half_meter_overhead') #'percent_no_cover_overhead'
+
+hsi_cover <- mark_gard_1998_hsi(data = mini_snorkel_model_ready, percent_presence = 20, cols = cols_inchannel)
 
 hsi_cover |> 
   pivot_longer(cols = c(hsc_presence, hsc_total), names_to = "hsc", values_to = "values") |> 
   ggplot() + 
   geom_col(aes(y = values, x = type, fill = hsc), position = "dodge") +
   coord_flip() +
-  ggtitle('Mark Gard 1998: Cover HSI Comparison')
+  ggtitle('Mark Gard 1998: In Channel Cover HSI Comparison')
 ```
 
 ![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
 
+``` r
+hsi_cover_overhead <- mark_gard_1998_hsi(data = mini_snorkel_model_ready, percent_presence = 20, cols = cols_overhead)
+
+hsi_cover_overhead |> 
+  pivot_longer(cols = c(hsc_presence, hsc_total), names_to = "hsc", values_to = "values") |> 
+  ggplot() + 
+  geom_col(aes(y = values, x = type, fill = hsc), position = "dodge") +
+  coord_flip() +
+  ggtitle('Mark Gard 1998: Overhead Cover HSI Comparison')
+```
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-8-2.png)<!-- -->
+
 ## Velocity and Depth
 
-``` r
-ggplot(mini_snorkel_model_ready) + 
-  geom_point(aes(x = count, y = velocity)) 
-```
+### Adapted Mark Gard 2023 HSC approach for Velocity and Depth
 
-    ## Warning: Removed 80 rows containing missing values (`geom_point()`).
-
-![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
-
-``` r
-ggplot(mini_snorkel_model_ready) + 
-  geom_boxplot(aes(x = fish_presence, y = velocity)) 
-```
-
-    ## Warning: Removed 80 rows containing non-finite values (`stat_boxplot()`).
-
-![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-9-2.png)<!-- -->
-
-``` r
-ggplot(mini_snorkel_model_ready) + 
-  geom_point(aes(x = count, y = depth)) 
-```
-
-![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-9-3.png)<!-- -->
-
-``` r
-ggplot(mini_snorkel_model_ready) + 
-  geom_boxplot(aes(x = fish_presence, y = depth)) 
-```
-
-![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-9-4.png)<!-- -->
-\### Adapted Mark Gard 2023 HSC approach for Velocity and Depth
+Mark Gard (2023) listed three approaches to calculating the HSI for
+depth and velocity. Each approach is attempted below.
 
 #### Approach 1: Criteria from use observations using curve fitting
 
@@ -490,8 +426,8 @@ lm_data <- mini_snorkel_model_ready |>
   na.omit()
 
 fit <- lm(count ~ poly(depth, 3) + poly(velocity, 3) , data = lm_data)
-hsi_values <- predict(fit, type = "response")
-lm_data$hsi_values <- hsi_values
+predicted_values <- predict(fit, type = "response")
+lm_data$predicted_values <- predicted_values
 
 tidy(fit)
 ```
@@ -511,12 +447,12 @@ tidy(fit)
 lm_data %>%
   ggplot(aes(x = depth, y = count)) +
   geom_point() +
-  geom_smooth(aes(x = depth, y = hsi_values), method = "lm", color = "blue") +
+  geom_smooth(aes(x = depth, y = predicted_values), color = "blue") +
   labs(x = "Depth", y = "Fish Count") +
   theme_minimal()
 ```
 
-    ## `geom_smooth()` using formula = 'y ~ x'
+    ## `geom_smooth()` using method = 'gam' and formula = 'y ~ s(x, bs = "cs")'
 
 ![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
 
@@ -524,12 +460,12 @@ lm_data %>%
 lm_data %>%
   ggplot(aes(x = velocity, y = count)) +
   geom_point() +
-  geom_smooth(aes(x = velocity, y = hsi_values), method = "lm", color = "blue") +
+  geom_smooth(aes(x = velocity, y = predicted_values), color = "blue") +
   labs(x = "Velocity", y = "Fish Count") +
   theme_minimal()
 ```
 
-    ## `geom_smooth()` using formula = 'y ~ x'
+    ## `geom_smooth()` using method = 'gam' and formula = 'y ~ s(x, bs = "cs")'
 
 ![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-10-2.png)<!-- -->
 
@@ -537,6 +473,8 @@ lm_data %>%
 
 Use/availability criteria are developed by dividing use observations,
 generally binned, by availability data from transects.
+
+TODO: unsure how to proceed with this approach..
 
 ``` r
 approach_2 <- mini_snorkel_model_ready |> 
@@ -552,7 +490,7 @@ log_reg_data <- mini_snorkel_model_ready |>
   na.omit()
 
 # Fit polynomial logistic regression model
-model <- glm(fish_presence ~ poly(depth, 2) + poly(velocity, 2), data = log_reg_data, family = binomial)
+model <- glm(fish_presence ~ poly(depth, 2) + poly(velocity, 2), data = log_reg_data, family = binomial())
 
 tidy(model)
 ```
@@ -567,28 +505,265 @@ tidy(model)
     ## 5 poly(velocity, 2)2    -6.46    5.18      -1.25  0.212
 
 ``` r
-# Calculate HSI values
-hsi_values <- predict(model, type = "response")
-log_reg_data$hsi_values <- hsi_values
-
-ggplot(log_reg_data) + 
-  geom_point(aes(x = depth, y = hsi_values)) + 
-  geom_smooth(aes(x = depth, y = hsi_values), method = "loess", color = "blue") 
+summary(model)
 ```
 
-    ## `geom_smooth()` using formula = 'y ~ x'
+    ## 
+    ## Call:
+    ## glm(formula = fish_presence ~ poly(depth, 2) + poly(velocity, 
+    ##     2), family = binomial(), data = log_reg_data)
+    ## 
+    ## Deviance Residuals: 
+    ##     Min       1Q   Median       3Q      Max  
+    ## -1.1627  -0.4053  -0.3901  -0.3781   2.5716  
+    ## 
+    ## Coefficients:
+    ##                    Estimate Std. Error z value Pr(>|z|)    
+    ## (Intercept)        -2.52789    0.05471 -46.209  < 2e-16 ***
+    ## poly(depth, 2)1    -1.27784    3.72036  -0.343  0.73124    
+    ## poly(depth, 2)2     8.02761    2.77009   2.898  0.00376 ** 
+    ## poly(velocity, 2)1 -5.15296    4.51194  -1.142  0.25342    
+    ## poly(velocity, 2)2 -6.45635    5.17744  -1.247  0.21239    
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## (Dispersion parameter for binomial family taken to be 1)
+    ## 
+    ##     Null deviance: 2624.0  on 4937  degrees of freedom
+    ## Residual deviance: 2613.3  on 4933  degrees of freedom
+    ## AIC: 2623.3
+    ## 
+    ## Number of Fisher Scoring iterations: 5
+
+``` r
+stats::step(model, test = "LRT")
+```
+
+    ## Start:  AIC=2623.3
+    ## fish_presence ~ poly(depth, 2) + poly(velocity, 2)
+    ## 
+    ##                     Df Deviance    AIC    LRT Pr(>Chi)  
+    ## - poly(velocity, 2)  2   2616.1 2622.1 2.7848  0.24848  
+    ## <none>                   2613.3 2623.3                  
+    ## - poly(depth, 2)     2   2620.8 2626.8 7.5123  0.02337 *
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Step:  AIC=2622.08
+    ## fish_presence ~ poly(depth, 2)
+    ## 
+    ##                  Df Deviance    AIC    LRT Pr(>Chi)  
+    ## <none>                2616.1 2622.1                  
+    ## - poly(depth, 2)  2   2624.0 2626.0 7.9409  0.01886 *
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+    ## 
+    ## Call:  glm(formula = fish_presence ~ poly(depth, 2), family = binomial(), 
+    ##     data = log_reg_data)
+    ## 
+    ## Coefficients:
+    ##     (Intercept)  poly(depth, 2)1  poly(depth, 2)2  
+    ##          -2.523           -1.612            8.209  
+    ## 
+    ## Degrees of Freedom: 4937 Total (i.e. Null);  4935 Residual
+    ## Null Deviance:       2624 
+    ## Residual Deviance: 2616  AIC: 2622
+
+``` r
+# depth, 2 only significant predictor 
+
+model_2 <- glm(fish_presence ~ poly(depth, 2), data = log_reg_data, family = binomial())
+
+summary(model_2)
+```
+
+    ## 
+    ## Call:
+    ## glm(formula = fish_presence ~ poly(depth, 2), family = binomial(), 
+    ##     data = log_reg_data)
+    ## 
+    ## Deviance Residuals: 
+    ##     Min       1Q   Median       3Q      Max  
+    ## -1.1705  -0.4036  -0.3873  -0.3742   2.3296  
+    ## 
+    ## Coefficients:
+    ##                 Estimate Std. Error z value Pr(>|z|)    
+    ## (Intercept)     -2.52310    0.05439 -46.393  < 2e-16 ***
+    ## poly(depth, 2)1 -1.61190    3.61007  -0.446  0.65524    
+    ## poly(depth, 2)2  8.20883    2.73543   3.001  0.00269 ** 
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## (Dispersion parameter for binomial family taken to be 1)
+    ## 
+    ##     Null deviance: 2624.0  on 4937  degrees of freedom
+    ## Residual deviance: 2616.1  on 4935  degrees of freedom
+    ## AIC: 2622.1
+    ## 
+    ## Number of Fisher Scoring iterations: 5
+
+``` r
+# Calculate HSI values
+predicted_vals <- predict.glm(model_2, type = "response")
+model_2_prediction <- log_reg_data |> 
+  mutate(predicted_vals = predicted_vals,
+         binary_predicted_vals <- ifelse(predicted_vals <= 0.5, 0, 1))
+
+ggplot(log_reg_data) + 
+  geom_point(aes(x = depth, y = predicted_vals)) + 
+  geom_smooth(aes(x = depth, y = predicted_vals), color = "blue") 
+```
+
+    ## `geom_smooth()` using method = 'gam' and formula = 'y ~ s(x, bs = "cs")'
 
 ![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
 
 ``` r
 ggplot(log_reg_data) + 
-  geom_point(aes(x = velocity, y = hsi_values)) + 
-  geom_smooth(aes(x = velocity, y = hsi_values), method = "loess", color = "blue") 
+  geom_point(aes(x = velocity, y = predicted_vals)) + 
+  geom_smooth(aes(x = velocity, y = predicted_vals), color = "blue") 
 ```
 
-    ## `geom_smooth()` using formula = 'y ~ x'
+    ## `geom_smooth()` using method = 'gam' and formula = 'y ~ s(x, bs = "cs")'
 
 ![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-12-2.png)<!-- -->
+
+### Alternative Mark Allen Approach
+
+[Seasonal microhabitat use by juvenile spring Chinook salmon in the
+Yakima River Basin,
+Washington](https://www.researchgate.net/publication/283579544_Seasonal_microhabitat_use_by_juvenile_spring_Chinook_salmon_in_the_Yakima_River_Basin_Washington?enrichId=rgreq-24ca3dc3af200b9ac3ffc17b07b2e506-XXX&enrichSource=Y292ZXJQYWdlOzI4MzU3OTU0NDtBUzoyOTM5MjI4ODM1NTUzMzNAMTQ0NzA4ODA4NDU5OA%3D%3D&el=1_x_3&_esc=publicationCoverPdf)
+
+1.  **Organize Data into Frequency Histograms:**
+
+    - Create frequency histograms for each habitat variable (depth, mean
+      column velocity, substrate, distance to bank, cover) using the
+      specified bin intervals.
+
+    - Bin intervals: 0.2 ft for depths and nose heights, 0.2 fps for
+      mean column and nose velocities, 0.5 for the substrate code, and
+      5.0 ft for distance to bank.
+
+2.  **Develop Habitat Suitability Criteria Curves:**
+
+    - Fit 4th-order polynomial regression models to the histograms for
+      depth, mean column velocity, and substrate.
+
+    - Use 6 discrete cover codes to develop cover-based HSC. TODO
+
+    - 4th-order polynomials are used for their ability to provide a
+      visually realistic fit to skewed HSC data.
+
+3.  **Calculate HSI Values:**
+
+    - Once the polynomial regression models are fitted, use them to
+      calculate HSI values for each habitat variable.
+
+    - The HSI values should range from 0 to 1, with 1 representing the
+      most suitable habitat.
+
+**Notes**
+
+- binned by 0.1 for depth and 0.01 for velocity
+
+- TODO mapping for substrate and cover
+
+- depth and velocity data has outliers removed and is filtered to data
+  that has fish present
+
+``` r
+depth_data_all <- mini_snorkel_model_ready |> 
+  select(count, depth) |> 
+  filter(count > 0) |>
+  mutate(weighted_depth = depth * count / sum(count)) |> 
+  na.omit()
+
+outlier_threshold <- quantile(depth_data_all$depth, 0.75)
+
+depth_data <- depth_data_all |> 
+  filter(depth <= outlier_threshold)
+
+max_depth <- max(depth_data$depth)
+
+depth_bins <- seq(0.1, max_depth + 1, by = 0.1)
+
+depth_hist <- hist(depth_data$depth, breaks = depth_bins, plot = FALSE)
+
+plot(depth_hist)
+
+depth_model <- lm(depth_hist$counts ~ poly(depth_hist$mids, 4)) #mids represent the central value of each bin
+
+depth_predicted <- predict(depth_model, newdata = data.frame(depth = depth_data$depth))
+```
+
+    ## Warning: 'newdata' had 296 rows but variables found have 379 rows
+
+``` r
+# Calculate HSI values
+hsi_depth <- pmax(0, pmin(1, depth_predicted / max(depth_predicted))) # noramlizes predicted values to the bounds of 0 to 1
+
+depth_to_hsi <- data.frame(hsi_depth = hsi_depth, 
+           depth = depth_hist$mids)
+
+plot(depth_hist)
+```
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
+
+``` r
+# Plotting
+ggplot(depth_to_hsi, aes(x = depth, y = hsi_depth)) +
+  geom_line() +
+  labs(x = "Depth", y = "HSI") +
+  ggtitle("Allen (2000): Depth Habitat Suitability Index")
+```
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-13-2.png)<!-- -->
+
+``` r
+velocity_data_all <- mini_snorkel_model_ready |> 
+  select(count, velocity) |> 
+  filter(count > 0) |>
+  na.omit()
+
+outlier_threshold <- quantile(velocity_data_all$velocity, 0.75)
+
+velocity_data <- velocity_data_all |> 
+  filter(velocity <= outlier_threshold)
+
+max_velocity <- max(velocity_data$velocity)
+
+velocity_bins <- seq(0, max_velocity+1, by = 0.01)
+
+velocity_hist <- hist(velocity_data$velocity, breaks = velocity_bins, plot = FALSE)
+
+# Fit 4th-order polynomial regression model
+velocity_model <- lm(velocity_hist$counts ~ poly(velocity_hist$mids, 4))
+
+vel_predicted <- predict(velocity_model, newdata = data.frame(velocity = velocity_data$velocity))
+```
+
+    ## Warning: 'newdata' had 278 rows but variables found have 176 rows
+
+``` r
+hsi_vel <- pmax(0, pmin(1, vel_predicted / max(vel_predicted)))
+vel_to_hsi <- data.frame(hsi_vel = hsi_vel, 
+           mid_vel = velocity_hist$mids)
+
+plot(velocity_hist)
+```
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
+
+``` r
+ggplot(vel_to_hsi, aes(x = mid_vel, y = hsi_vel)) +
+  geom_line() +
+  labs(x = "Velocity", y = "HSI") +
+  ggtitle("Allen (2000): Velocity Habitat Suitability Index")
+```
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-14-2.png)<!-- -->
 
 ``` r
 knitr::knit_exit()
