@@ -20,13 +20,9 @@ theme_set(theme_minimal())
 
 ```{r}
 # read in mini snorkel data
-mini_snorkel <- read_csv('../../feather-mini-snorkel/data/microhabitat_with_fish_observations.csv') |>
+mini_snorkel <- read_csv('microhabitat_with_fish_observations.csv') |> 
   mutate(count = ifelse(is.na(count), 0, count)) |> 
   glimpse()
-
-# mini_snorkel <- read_csv('https://raw.githubusercontent.com/FlowWest/feather-mini-snorkel/qc-data/data/microhabitat_with_fish_observations.csv?token=GHSAT0AAAAAACCSPYJRVFBZ33MHJ2WM5ZX4ZQMRB5A') |> 
-#   mutate(count = ifelse(is.na(count), 0, count)) |> 
-#   glimpse()
 
 ```
 
@@ -102,7 +98,7 @@ HSC comparison
 ```{r}
 
 mini_snorkel_model_ready <- mini_snorkel |> 
-  select(depth:percent_cover_more_than_half_meter_overhead, count, channel_geomorphic_unit, species) |> 
+  #select(depth:percent_cover_more_than_half_meter_overhead, count, channel_geomorphic_unit, species) |> 
   mutate(fish_presence = as.factor(ifelse(count < 1, "0", "1")))
 
 ```
@@ -128,7 +124,205 @@ heatmap(cor_matrix,
         margins = c(10, 10))
 ```
 
-### Logistic Regression
+### Logistic Regression Using Cover, Substrate, Velocity, and Depth
+
+**Predictors**
+
+-   Depth
+
+-   Velocity
+
+-   Substrate (fine through boulder) normalized by prevalence
+
+-   Woody Debris (`percent_small_woody_cover_inchannel` +
+    `percent_large_woody_cover_inchannel`)
+
+-   Overhead Cover (`percent_cover_more_than_half_meter_overhead` +
+    `percent_cover_half_meter_overhead`)
+
+-   Submerged Aquatic Vegetation
+
+-   Undercut Bank
+
+-   Transect Code
+
+-   Surface Turbidity
+
+-   Month
+
+#### Normalize Substrate by Prevalence
+
+This table provides a weighting for each substrate type based on the
+overall presence (\>20%) of each substrate type. Use this to normalize
+the substrate columns.
+
+```{r}
+substrate_percent <- mini_snorkel |> 
+  group_by(micro_hab_data_tbl_id) |> 
+  select(contains('substrate')) |> 
+  distinct() |> 
+  pivot_longer(cols = c(percent_fine_substrate:percent_boulder_substrate), names_to = "substrate_type", values_to = "percent") |> 
+  mutate(substrate_presence_absence = ifelse(percent < 19, 0, 1)) |>  # 20% threshold
+  group_by(substrate_type) |> 
+  summarise(total_presence = sum(substrate_presence_absence)) |> 
+  ungroup() |> 
+  mutate(perc_total = total_presence/sum(total_presence))
+
+knitr::kable(substrate_percent |> mutate(perc_total = perc_total*100), digits = 2)
+
+```
+
+#### Apply table to substrate columns to normalize
+
+```{r}
+mini_snorkel_grouped <- mini_snorkel_model_ready |> 
+  rowwise() |> 
+  mutate(fine_substrate = percent_fine_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_fine_substrate", 'perc_total']$perc_total),
+         sand_substrate = percent_sand_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_sand_substrate", 'perc_total']$perc_total),
+         small_gravel = percent_small_gravel_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_small_gravel_substrate", 'perc_total']$perc_total),
+         large_gravel = percent_large_gravel_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_large_gravel_substrate", 'perc_total']$perc_total),
+         cobble_substrate = percent_cobble_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_cobble_substrate", 'perc_total']$perc_total),
+         boulder_substrate = percent_boulder_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_boulder_substrate", 'perc_total']$perc_total)) |> 
+  select(-c(percent_fine_substrate:percent_boulder_substrate)) |> 
+  mutate(woody_debris = sum(percent_large_woody_cover_inchannel, percent_small_woody_cover_inchannel),
+         overhead_cover = sum(percent_cover_half_meter_overhead, percent_cover_more_than_half_meter_overhead)
+         ) |> 
+  select(-c(percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_cover_more_than_half_meter_overhead, percent_cover_half_meter_overhead)) |> 
+  #filter(species == "Chinook salmon" | is.na(species)) |> 
+  select(-count, -channel_geomorphic_unit, -species, -micro_hab_data_tbl_id, -location_table_id, -fish_data_id,
+         -focal_velocity, -dist_to_bottom, -fl_mm) |> 
+  select(-(contains("no_cover"))) |> 
+  mutate(month = month(date)) |> 
+  select(-date) |> 
+  distinct() |> 
+  glimpse()
+```
+
+#### Explore newly constructed variables
+
+```{r echo=FALSE}
+ggplot(mini_snorkel_grouped, aes(fine_substrate)) +
+  geom_density()
+
+ggplot(mini_snorkel_grouped, aes(sand_substrate)) +
+  geom_density()
+
+ggplot(mini_snorkel_grouped, aes(small_gravel)) +
+  geom_density()
+
+ggplot(mini_snorkel_grouped, aes(large_gravel)) +
+  geom_density()
+
+ggplot(mini_snorkel_grouped, aes(boulder_substrate)) +
+  geom_density()
+
+ggplot(mini_snorkel_grouped, aes(woody_debris)) +
+  geom_density()
+
+ggplot(mini_snorkel_grouped, aes(overhead_cover)) +
+  geom_density()
+```
+
+#### Resample for an Equal Distribution
+
+Use `ROSE` library to generate a synthetic dataset that randomly samples
+and creates an equal distribution of fish presence/absence
+
+```{r}
+table(mini_snorkel_grouped$fish_presence)
+
+mini_snorkel_equal_sample <- ROSE::ovun.sample(fish_presence~., data = mini_snorkel_grouped,
+                                N = nrow(mini_snorkel_grouped), p = 0.5, 
+                                seed = 1, method = "both")$data
+
+table(mini_snorkel_equal_sample$fish_presence)
+```
+
+#### Create Logistic Regression
+
+```{r}
+model <- glm(fish_presence ~., data = mini_snorkel_equal_sample, family = binomial)
+
+probabilities <- predict(model, type = "response")
+predicted_classes <- ifelse(probabilities > 0.5, "1", "0") 
+
+# check for linearity
+
+# influential values
+plot(model, which = 4, id.n = 3)
+
+# Extract model results
+model_data <- augment(model) %>% 
+  mutate(index = 1:n()) 
+
+model_data |> top_n(3, .cooksd) # top three largest influential values (as seen in plot)
+
+#standard resuiduals: a measure of the strength of the difference between observed and expected values. 
+ggplot(model_data, aes(index, .std.resid)) + 
+  geom_point(aes(color = fish_presence), alpha = .5) 
+
+# Filter potential influential data points with abs(.std.res) > 3:
+chn_mini_snorkel_filtered <- model_data %>% 
+  filter(abs(.std.resid) < 3)
+
+# test if any columns are equal, none are perfectly equal
+test_if_equal <- cor(mini_snorkel_equal_sample |> select(-fish_presence)) |>  
+  as_tibble() |> 
+        rowwise()  |> 
+        mutate(match = n_distinct(unlist(cur_data())) == 1)  |> 
+        ungroup()
+
+#the linearly dependent variables. These variables are too linear and need to be removed from 
+# the model formula: 
+ld_vars <- attributes(alias(model)$Complete)$dimnames[[1]]
+print(ld_vars)
+
+chn_mini_snorkel_filtered_without_linear_cols <- chn_mini_snorkel_filtered |> 
+  select(-ld_vars, -(.fitted:index)) 
+
+model_2 <- glm(fish_presence ~., data = chn_mini_snorkel_filtered_without_linear_cols, family = binomial)
+
+# test for multicollinarity:
+# As a rule of thumb, a VIF value that exceeds 5 or 10 indicates a problematic amount of collinearity.
+car::vif(model_2) 
+
+summary(model_2)
+
+# # columns with vif less than 10
+# vif_cols <- names(car::vif(model_2)[car::vif(model_2) < 10])
+# 
+# chn_mini_snorkel_filtered_without_linear_cols_vif <- chn_mini_snorkel_filtered_without_linear_cols |> 
+#   select(fish_presence, vif_cols) |> glimpse()
+# 
+# model_3 <-  glm(fish_presence ~., data = chn_mini_snorkel_filtered_without_linear_cols_vif, family = binomial)
+# 
+# # test that there is still no multicollinearity
+# car::vif(model_3) 
+# 
+# probabilities <- predict(model_3, type = "response")
+# predicted_classes <- ifelse(probabilities > 0.5, "1", "0") 
+# 
+# summary(model_3)
+
+
+```
+
+```{r}
+library(patchwork)
+library(ggeffects)
+
+plts = lapply(names(coefficients(model_2))[-1],function(i){
+       return(plot(ggpredict(model_2,i)))
+       })
+
+#wrap_plots(plts)
+
+plts
+# ggpredict(model_3)
+
+```
+
+### Logistic Regression for Substrate and Cover
 
 Build a logistic regression of fish presence and absence to identify
 important cover and substrate variables.
@@ -465,7 +659,7 @@ Washington](https://www.researchgate.net/publication/283579544_Seasonal_microhab
     -   Fit 4th-order polynomial regression models to the histograms for
         depth, mean column velocity, and substrate.
 
-    -   Use 6 discrete cover codes to develop cover-based HSC. TODO
+    -   Use 6 discrete cover codes to develop cover-based HSC.
 
     -   4th-order polynomials are used for their ability to provide a
         visually realistic fit to skewed HSC data.
@@ -559,6 +753,72 @@ ggplot(vel_to_hsi, aes(x = mid_vel, y = hsi_vel)) +
   geom_line() +
   labs(x = "Velocity", y = "HSI") +
   ggtitle("Allen (2000): Velocity Habitat Suitability Index")
+
+
+```
+
+#### Allen: Substrate
+
+Map the substrate types to unique codes.
+
+| Mini Snorkel Data Type | Substrate Size Range (mm) | Substrate Code |
+|------------------------|---------------------------|----------------|
+| fine                   | 0-0.05                    | 1              |
+| sand                   | 0.05-2                    | 2              |
+| small gravel           | 2-50                      | 3              |
+| large gravel           | 50-150                    | 4              |
+| cobble                 | 150-300                   | 5              |
+| boulder                | \>300                     | 6              |
+
+```{r}
+cols <- c('percent_fine_substrate', "percent_sand_substrate" , 'percent_small_gravel_substrate', 'percent_large_gravel_substrate', 'percent_cobble_substrate', 'percent_boulder_substrate')
+
+
+allen_substrate <- mini_snorkel_model_ready |> 
+  select(count, fish_presence, cols) |> 
+    pivot_longer(cols = cols, names_to = "type", values_to = "percent") |> 
+  mutate(substrate_code = case_when(type == "percent_fine_substrate" ~ 1,
+                                    type == "percent_sand_substrate" ~ 2,
+                                    type == "percent_small_gravel_substrate" ~ 3,
+                                    type == "percent_large_gravel_substrate" ~ 4,
+                                    type == "percent_cobble_substrate" ~ 5,
+                                    type == "percent_boulder_substrate" ~ 6)) |> 
+  filter(percent > 20) |> 
+  filter(count > 0) |> 
+  filter(substrate_code == 3) # |> 
+ # mutate(percent = count * (percent / 100)) # normalize to fish count
+
+
+# outlier_threshold <- quantile(allen_substrate$percent, 0.75)
+# 
+# depth_data <- depth_data_all |> 
+#   filter(depth <= outlier_threshold)
+
+max_percent <- max(allen_substrate$percent)
+
+percent_bins <- seq(0, max_percent, by = 1)
+
+sub_hist <- hist(allen_substrate$percent, breaks = percent_bins, plot = FALSE)
+
+plot(sub_hist)
+
+model <- lm(sub_hist$counts ~ poly(sub_hist$mids, 4)) #mids represent the central value of each bin
+
+sub_predicted <- predict(model, newdata = data.frame(substrate = allen_substrate$percent))
+
+# Calculate HSI values
+hsi <- pmax(0, pmin(1, sub_predicted / max(sub_predicted))) # noramlizes predicted values to the bounds of 0 to 1
+
+sub_to_hsi <- data.frame(hsi = hsi, 
+           substrate = sub_hist$mids)
+
+# Plotting
+ggplot(sub_to_hsi, aes(x = substrate, y = hsi)) +
+  geom_line() +
+  labs(x = "Substrate %", y = "HSI") +
+  ggtitle("Allen (2000): Substrate Habitat Suitability Index")
+
+
 
 
 ```
