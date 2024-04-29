@@ -144,11 +144,8 @@ heatmap(cor_matrix,
 
 -   Undercut Bank
 
--   Transect Code
-
 -   Surface Turbidity
 
--   Month
 
 #### Normalize Substrate by Prevalence
 
@@ -190,11 +187,10 @@ mini_snorkel_grouped <- mini_snorkel_model_ready |>
   select(-c(percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_cover_more_than_half_meter_overhead, percent_cover_half_meter_overhead)) |> 
   #filter(species == "Chinook salmon" | is.na(species)) |> 
   select(-count, -channel_geomorphic_unit, -species, -micro_hab_data_tbl_id, -location_table_id, -fish_data_id,
-         -focal_velocity, -dist_to_bottom, -fl_mm) |> 
+         -focal_velocity, -dist_to_bottom, -fl_mm, -transect_code, -date) |> 
   select(-(contains("no_cover"))) |> 
-  mutate(month = month(date)) |> 
-  select(-date) |> 
   distinct() |> 
+  na.omit() |> 
   glimpse()
 ```
 
@@ -223,30 +219,52 @@ ggplot(mini_snorkel_grouped, aes(overhead_cover)) +
   geom_density()
 ```
 
-#### Resample for an Equal Distribution
+```{r eval=FALSE, include=FALSE}
+library(AppliedPredictiveModeling)
+transparentTheme(trans = .4)
+library(caret)
 
-Use `ROSE` library to generate a synthetic dataset that randomly samples
-and creates an equal distribution of fish presence/absence
+mini_snorkel_by_species <- mini_snorkel_model_ready |> 
+  filter(!is.na(species))
+
+featurePlot(x = mini_snorkel_by_species, 
+            y = mini_snorkel_by_species$species, 
+            plot = "ellipse",
+            ## Add a key at the top
+            auto.key = list(columns = 3))
+
+```
+```{r eval=FALSE, include=FALSE}
+descrCor <-  cor(mini_snorkel_grouped)
+highCorr <- sum(abs(descrCor[upper.tri(descrCor)]) > .999)
+
+comboInfo <- findLinearCombos(mini_snorkel_grouped |> as_tibble() |>  select(-fish_presence))
+
+```
+Normalized data 
 
 ```{r}
-table(mini_snorkel_grouped$fish_presence)
+library(caret)
 
-mini_snorkel_equal_sample <- ROSE::ovun.sample(fish_presence~., data = mini_snorkel_grouped,
-                                N = nrow(mini_snorkel_grouped), p = 0.5, 
-                                seed = 1, method = "both")$data
+test <- caret::preProcess(mini_snorkel_grouped, method = c("center", "scale", "YeoJohnson"))
+test
 
-table(mini_snorkel_equal_sample$fish_presence)
+test_transformed <- predict(test, mini_snorkel_grouped) |> na.omit()
+
+names_change <- names(test_transformed)
+names(test_transformed) <- paste0(names(test_transformed), "_transformed")
+test_transformed <- test_transformed |> rename(fish_presence = fish_presence_transformed)
+
+
 ```
 
 #### Create Logistic Regression
 
 ```{r}
-model <- glm(fish_presence ~., data = mini_snorkel_equal_sample, family = binomial)
+model <- glm(fish_presence ~., data = test_transformed, family = binomial)
 
 probabilities <- predict(model, type = "response")
 predicted_classes <- ifelse(probabilities > 0.5, "1", "0") 
-
-# check for linearity
 
 # influential values
 plot(model, which = 4, id.n = 3)
@@ -265,13 +283,6 @@ ggplot(model_data, aes(index, .std.resid)) +
 chn_mini_snorkel_filtered <- model_data %>% 
   filter(abs(.std.resid) < 3)
 
-# test if any columns are equal, none are perfectly equal
-test_if_equal <- cor(mini_snorkel_equal_sample |> select(-fish_presence)) |>  
-  as_tibble() |> 
-        rowwise()  |> 
-        mutate(match = n_distinct(unlist(cur_data())) == 1)  |> 
-        ungroup()
-
 #the linearly dependent variables. These variables are too linear and need to be removed from 
 # the model formula: 
 ld_vars <- attributes(alias(model)$Complete)$dimnames[[1]]
@@ -288,26 +299,35 @@ car::vif(model_2)
 
 summary(model_2)
 
-# # columns with vif less than 10
-# vif_cols <- names(car::vif(model_2)[car::vif(model_2) < 10])
-# 
-# chn_mini_snorkel_filtered_without_linear_cols_vif <- chn_mini_snorkel_filtered_without_linear_cols |> 
-#   select(fish_presence, vif_cols) |> glimpse()
-# 
-# model_3 <-  glm(fish_presence ~., data = chn_mini_snorkel_filtered_without_linear_cols_vif, family = binomial)
-# 
-# # test that there is still no multicollinearity
-# car::vif(model_3) 
-# 
-# probabilities <- predict(model_3, type = "response")
-# predicted_classes <- ifelse(probabilities > 0.5, "1", "0") 
-# 
-# summary(model_3)
+probabilities_model_2 <- predict(model_2, type = "response")
 
 
 ```
 
+
 ```{r}
+to_plot <- test_transformed |> 
+  bind_cols(data.frame("probabliliites" = probabilities_model_2)) |> 
+  bind_cols(mini_snorkel_grouped |> select(-fish_presence)) |> glimpse()
+
+ggplot(to_plot, aes(x = surface_turbidity, y = probabilities)) +
+  geom_smooth()
+
+ggplot(to_plot, aes(x = overhead_cover, y = probabilities)) +
+  geom_smooth()
+
+ggplot(to_plot, aes(x = woody_debris, y = probabilities)) +
+  geom_smooth()
+
+ggplot(to_plot, aes(x = small_gravel, y = probabilities)) +
+  geom_smooth()
+
+ggplot(to_plot, aes(x = percent_undercut_bank, y = probabilities)) +
+  geom_point()
+
+```
+
+```{r eval=FALSE, include=FALSE}
 library(patchwork)
 library(ggeffects)
 
@@ -320,6 +340,14 @@ plts = lapply(names(coefficients(model_2))[-1],function(i){
 plts
 # ggpredict(model_3)
 
+```
+
+## Checks
+* Sample size of presence observations 
+* stepwise 
+
+```{r}
+knitr::knit_exit()
 ```
 
 ### Logistic Regression for Substrate and Cover
@@ -823,9 +851,6 @@ ggplot(sub_to_hsi, aes(x = substrate, y = hsi)) +
 
 ```
 
-```{r}
-knitr::knit_exit()
-```
 
 ### Mapping of Substrate and Cover
 
