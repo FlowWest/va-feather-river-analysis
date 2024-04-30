@@ -1,7 +1,7 @@
 Mini Snorkel Feather HSI Workflow
 ================
 Maddee Rubenson
-2024-04-29
+2024-04-30
 
 ``` r
 # read in mini snorkel data
@@ -121,7 +121,6 @@ HSC comparison
 
 ``` r
 mini_snorkel_model_ready <- mini_snorkel |> 
-  #select(depth:percent_cover_more_than_half_meter_overhead, count, channel_geomorphic_unit, species) |> 
   mutate(fish_presence = as.factor(ifelse(count < 1, "0", "1")))
 ```
 
@@ -204,8 +203,8 @@ mini_snorkel_grouped <- mini_snorkel_model_ready |>
          ) |> 
   select(-c(percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_cover_more_than_half_meter_overhead, percent_cover_half_meter_overhead)) |> 
   #filter(species == "Chinook salmon" | is.na(species)) |> 
-  select(-count, -channel_geomorphic_unit, -species, -micro_hab_data_tbl_id, -location_table_id, -fish_data_id,
-         -focal_velocity, -dist_to_bottom, -fl_mm, -transect_code, -date) |> 
+  select(-count, -channel_geomorphic_unit, -micro_hab_data_tbl_id, -location_table_id, -fish_data_id,
+         -focal_velocity, -dist_to_bottom, -fl_mm, -species,  -transect_code, -date) |> 
   select(-(contains("no_cover"))) |> 
   distinct() |> 
   na.omit() |> 
@@ -234,7 +233,9 @@ mini_snorkel_grouped <- mini_snorkel_model_ready |>
 
 ![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-6-2.png)<!-- -->![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-6-3.png)<!-- -->![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-6-4.png)<!-- -->![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-6-5.png)<!-- -->![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-6-6.png)<!-- -->![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-6-7.png)<!-- -->
 
-Normalized data
+Normalized and Center the data
+
+- 
 
 ``` r
 library(caret)
@@ -271,268 +272,249 @@ test
     ## -2.6245 -1.5607 -0.5054 -0.8345 -0.1017  0.3098
 
 ``` r
+# Yeo Johnson:
+test[["method"]][["YeoJohnson"]]
+```
+
+    ##  [1] "depth"                                  
+    ##  [2] "velocity"                               
+    ##  [3] "percent_submerged_aquatic_veg_inchannel"
+    ##  [4] "surface_turbidity"                      
+    ##  [5] "sand_substrate"                         
+    ##  [6] "small_gravel"                           
+    ##  [7] "large_gravel"                           
+    ##  [8] "cobble_substrate"                       
+    ##  [9] "boulder_substrate"                      
+    ## [10] "woody_debris"                           
+    ## [11] "overhead_cover"
+
+``` r
+test[["method"]][["center"]]
+```
+
+    ##  [1] "depth"                                  
+    ##  [2] "velocity"                               
+    ##  [3] "percent_submerged_aquatic_veg_inchannel"
+    ##  [4] "percent_undercut_bank"                  
+    ##  [5] "surface_turbidity"                      
+    ##  [6] "fine_substrate"                         
+    ##  [7] "sand_substrate"                         
+    ##  [8] "small_gravel"                           
+    ##  [9] "large_gravel"                           
+    ## [10] "cobble_substrate"                       
+    ## [11] "boulder_substrate"                      
+    ## [12] "woody_debris"                           
+    ## [13] "overhead_cover"
+
+``` r
+test[["method"]][["scale"]]
+```
+
+    ##  [1] "depth"                                  
+    ##  [2] "velocity"                               
+    ##  [3] "percent_submerged_aquatic_veg_inchannel"
+    ##  [4] "percent_undercut_bank"                  
+    ##  [5] "surface_turbidity"                      
+    ##  [6] "fine_substrate"                         
+    ##  [7] "sand_substrate"                         
+    ##  [8] "small_gravel"                           
+    ##  [9] "large_gravel"                           
+    ## [10] "cobble_substrate"                       
+    ## [11] "boulder_substrate"                      
+    ## [12] "woody_debris"                           
+    ## [13] "overhead_cover"
+
+``` r
 test_transformed <- predict(test, mini_snorkel_grouped) |> na.omit()
 
 names_change <- names(test_transformed)
 names(test_transformed) <- paste0(names(test_transformed), "_transformed")
 test_transformed <- test_transformed |> rename(fish_presence = fish_presence_transformed)
+
+
+ggplot() +
+  geom_histogram(data = test_transformed, aes(depth_transformed)) 
 ```
 
-#### Create Logistic Regression
+    ## `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
 
 ``` r
-model <- glm(fish_presence ~., data = test_transformed, family = binomial)
-
-probabilities <- predict(model, type = "response")
-predicted_classes <- ifelse(probabilities > 0.5, "1", "0") 
-
-# influential values
-plot(model, which = 4, id.n = 3)
+ggplot() +
+geom_histogram(data = mini_snorkel_grouped, aes(log(depth)), alpha = 0.5)
 ```
 
-![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+    ## `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-9-2.png)<!-- -->
 
 ``` r
-# Extract model results
-model_data <- augment(model) %>% 
-  mutate(index = 1:n()) 
-
-model_data |> top_n(3, .cooksd) # top three largest influential values (as seen in plot)
+# ggplot() +
+#   geom_histogram(data = test_transformed, aes(overhead_cover_transformed)) 
+# 
+# ggplot() +
+# geom_histogram(data = mini_snorkel_grouped, aes(overhead_cover), alpha = 0.5)
 ```
-
-    ## # A tibble: 3 × 21
-    ##   fish_presence depth_transformed velocity_transformed percent_submerged_aquat…¹
-    ##   <fct>                     <dbl>                <dbl>                     <dbl>
-    ## 1 1                        -2.36                -0.926                    -0.780
-    ## 2 1                        -0.122                0.257                    -0.780
-    ## 3 0                         1.28                 0.566                     1.04 
-    ## # ℹ abbreviated name: ¹​percent_submerged_aquatic_veg_inchannel_transformed
-    ## # ℹ 17 more variables: percent_undercut_bank_transformed <dbl>,
-    ## #   surface_turbidity_transformed <dbl>, fine_substrate_transformed <dbl>,
-    ## #   sand_substrate_transformed <dbl>, small_gravel_transformed <dbl>,
-    ## #   large_gravel_transformed <dbl>, cobble_substrate_transformed <dbl>,
-    ## #   boulder_substrate_transformed <dbl>, woody_debris_transformed <dbl>,
-    ## #   overhead_cover_transformed <dbl>, .fitted <dbl>, .resid <dbl>, …
 
 ``` r
-#standard resuiduals: a measure of the strength of the difference between observed and expected values. 
-ggplot(model_data, aes(index, .std.resid)) + 
-  geom_point(aes(color = fish_presence), alpha = .5) 
+options(scipen=999)
+
+
+# Split the data into training and testing sets
+data_split <- initial_split(mini_snorkel_grouped, prop = 0.8, strata = "fish_presence")
+data_train <- training(data_split)
+data_test <- testing(data_split)
+
+recipe <- recipe(data = mini_snorkel_grouped, formula = fish_presence ~.) |> 
+  step_mutate_at(all_numeric_predictors(), fn = asinh) |> 
+  step_naomit(all_predictors()) |> 
+  step_zv(all_predictors()) |> 
+  step_normalize(all_numeric_predictors())
+
+log_reg <- logistic_reg() |> 
+  set_engine("glm") 
+
+log_reg_model <- workflow() |>
+  add_recipe(recipe) |>
+  add_model(log_reg) |> 
+  fit(data = mini_snorkel_grouped)
+
+log_reg_model |> glance()
 ```
 
-![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-10-2.png)<!-- -->
+    ## # A tibble: 1 × 8
+    ##   null.deviance df.null logLik   AIC   BIC deviance df.residual  nobs
+    ##           <dbl>   <int>  <dbl> <dbl> <dbl>    <dbl>       <int> <int>
+    ## 1         1935.    4740  -891. 1810. 1900.    1782.        4727  4741
 
 ``` r
-# Filter potential influential data points with abs(.std.res) > 3:
-chn_mini_snorkel_filtered <- model_data %>% 
-  filter(abs(.std.resid) < 3)
-
-#the linearly dependent variables. These variables are too linear and need to be removed from 
-# the model formula: 
-ld_vars <- attributes(alias(model)$Complete)$dimnames[[1]]
-print(ld_vars)
+log_reg_model |> tidy() |> filter(p.value < 0.1)
 ```
 
-    ## NULL
+    ## # A tibble: 7 × 5
+    ##   term                  estimate std.error statistic  p.value
+    ##   <chr>                    <dbl>     <dbl>     <dbl>    <dbl>
+    ## 1 (Intercept)             -3.15     0.0783    -40.2  0       
+    ## 2 percent_undercut_bank    0.123    0.0378      3.26 1.10e- 3
+    ## 3 surface_turbidity        0.286    0.0697      4.10 4.14e- 5
+    ## 4 small_gravel            -0.202    0.0777     -2.60 9.31e- 3
+    ## 5 boulder_substrate        0.131    0.0663      1.97 4.85e- 2
+    ## 6 woody_debris             0.395    0.0617      6.40 1.57e-10
+    ## 7 overhead_cover           0.266    0.0637      4.18 2.88e- 5
 
 ``` r
-chn_mini_snorkel_filtered_without_linear_cols <- chn_mini_snorkel_filtered |> 
-  select(-ld_vars, -(.fitted:index)) 
+sig_predictors <- log_reg_model |> tidy() |> filter(p.value < 0.1) |> filter(term != "(Intercept)") |>  pull(term)
+
+print(sig_predictors)
 ```
 
-    ## Warning: Using an external vector in selections was deprecated in tidyselect 1.1.0.
-    ## ℹ Please use `all_of()` or `any_of()` instead.
-    ##   # Was:
-    ##   data %>% select(ld_vars)
-    ## 
-    ##   # Now:
-    ##   data %>% select(all_of(ld_vars))
-    ## 
-    ## See <https://tidyselect.r-lib.org/reference/faq-external-vector.html>.
+    ## [1] "percent_undercut_bank" "surface_turbidity"     "small_gravel"         
+    ## [4] "boulder_substrate"     "woody_debris"          "overhead_cover"
+
+``` r
+predictions <- predict(log_reg_model, mini_snorkel_grouped, type = "prob") |> 
+  bind_cols(mini_snorkel_grouped) |> glimpse()
+```
+
+    ## Rows: 4,741
+    ## Columns: 16
+    ## $ .pred_0                                 <dbl> 0.8987728, 0.9489380, 0.948948…
+    ## $ .pred_1                                 <dbl> 0.10122716, 0.05106199, 0.0510…
+    ## $ depth                                   <dbl> 17, 19, 11, 12, 11, 10, 8, 9, …
+    ## $ velocity                                <dbl> 0.22, 0.35, 1.95, 2.14, 1.19, …
+    ## $ percent_submerged_aquatic_veg_inchannel <dbl> 10, 0, 0, 0, 30, 0, 0, 0, 40, …
+    ## $ percent_undercut_bank                   <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, …
+    ## $ surface_turbidity                       <dbl> 20, 30, 30, 30, 10, 10, 10, 10…
+    ## $ fish_presence                           <fct> 1, 0, 0, 0, 1, 0, 0, 1, 1, 1, …
+    ## $ fine_substrate                          <dbl> 0.00000, 0.00000, 0.00000, 0.0…
+    ## $ sand_substrate                          <dbl> 34.064710, 42.580887, 21.29044…
+    ## $ small_gravel                            <dbl> 13.784015, 27.568031, 51.69005…
+    ## $ large_gravel                            <dbl> 20.618170, 6.872723, 0.000000,…
+    ## $ cobble_substrate                        <dbl> 8.395115, 0.000000, 0.000000, …
+    ## $ boulder_substrate                       <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, …
+    ## $ woody_debris                            <dbl> 15, 0, 0, 0, 60, 0, 0, 0, 10, …
+    ## $ overhead_cover                          <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 25, 0,…
+
+``` r
+map(sig_predictors, function(predictor) {
+  ggplot(predictions, aes_string(x = predictor, y = ".pred_1")) +
+    geom_smooth() +
+    labs(title = paste("Predicted Probability vs.", predictor))
+})
+```
+
+    ## Warning: `aes_string()` was deprecated in ggplot2 3.0.0.
+    ## ℹ Please use tidy evaluation idioms with `aes()`.
+    ## ℹ See also `vignette("ggplot2-in-packages")` for more information.
     ## This warning is displayed once every 8 hours.
     ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
     ## generated.
 
-``` r
-model_2 <- glm(fish_presence ~., data = chn_mini_snorkel_filtered_without_linear_cols, family = binomial)
-
-# test for multicollinarity:
-# As a rule of thumb, a VIF value that exceeds 5 or 10 indicates a problematic amount of collinearity.
-car::vif(model_2) 
-```
-
-    ##                                   depth_transformed 
-    ##                                            1.228695 
-    ##                                velocity_transformed 
-    ##                                            1.379456 
-    ## percent_submerged_aquatic_veg_inchannel_transformed 
-    ##                                            1.237600 
-    ##                   percent_undercut_bank_transformed 
-    ##                                            1.037404 
-    ##                       surface_turbidity_transformed 
-    ##                                            1.266114 
-    ##                          fine_substrate_transformed 
-    ##                                            1.456608 
-    ##                          sand_substrate_transformed 
-    ##                                            1.907022 
-    ##                            small_gravel_transformed 
-    ##                                            1.566785 
-    ##                            large_gravel_transformed 
-    ##                                            1.614546 
-    ##                        cobble_substrate_transformed 
-    ##                                            1.636372 
-    ##                       boulder_substrate_transformed 
-    ##                                            1.368208 
-    ##                            woody_debris_transformed 
-    ##                                            1.280364 
-    ##                          overhead_cover_transformed 
-    ##                                            1.327627
-
-``` r
-summary(model_2)
-```
-
-    ## 
-    ## Call:
-    ## glm(formula = fish_presence ~ ., family = binomial, data = chn_mini_snorkel_filtered_without_linear_cols)
-    ## 
-    ## Deviance Residuals: 
-    ##     Min       1Q   Median       3Q      Max  
-    ## -1.1205  -0.3318  -0.2688  -0.2131   2.7882  
-    ## 
-    ## Coefficients:
-    ##                                                      Estimate Std. Error
-    ## (Intercept)                                         -3.140055   0.078079
-    ## depth_transformed                                   -0.032723   0.074917
-    ## velocity_transformed                                 0.004733   0.080413
-    ## percent_submerged_aquatic_veg_inchannel_transformed -0.052889   0.073159
-    ## percent_undercut_bank_transformed                    0.112577   0.035607
-    ## surface_turbidity_transformed                        0.252854   0.069590
-    ## fine_substrate_transformed                           0.022758   0.060926
-    ## sand_substrate_transformed                          -0.046758   0.088531
-    ## small_gravel_transformed                            -0.251273   0.082692
-    ## large_gravel_transformed                            -0.063394   0.081007
-    ## cobble_substrate_transformed                        -0.142761   0.084796
-    ## boulder_substrate_transformed                        0.131829   0.067794
-    ## woody_debris_transformed                             0.396093   0.062136
-    ## overhead_cover_transformed                           0.269272   0.064593
-    ##                                                     z value Pr(>|z|)    
-    ## (Intercept)                                         -40.216  < 2e-16 ***
-    ## depth_transformed                                    -0.437  0.66226    
-    ## velocity_transformed                                  0.059  0.95307    
-    ## percent_submerged_aquatic_veg_inchannel_transformed  -0.723  0.46972    
-    ## percent_undercut_bank_transformed                     3.162  0.00157 ** 
-    ## surface_turbidity_transformed                         3.633  0.00028 ***
-    ## fine_substrate_transformed                            0.374  0.70875    
-    ## sand_substrate_transformed                           -0.528  0.59739    
-    ## small_gravel_transformed                             -3.039  0.00238 ** 
-    ## large_gravel_transformed                             -0.783  0.43388    
-    ## cobble_substrate_transformed                         -1.684  0.09226 .  
-    ## boulder_substrate_transformed                         1.945  0.05183 .  
-    ## woody_debris_transformed                              6.375 1.83e-10 ***
-    ## overhead_cover_transformed                            4.169 3.06e-05 ***
-    ## ---
-    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-    ## 
-    ## (Dispersion parameter for binomial family taken to be 1)
-    ## 
-    ##     Null deviance: 1934.7  on 4740  degrees of freedom
-    ## Residual deviance: 1794.2  on 4727  degrees of freedom
-    ## AIC: 1822.2
-    ## 
-    ## Number of Fisher Scoring iterations: 6
-
-``` r
-probabilities_model_2 <- predict(model_2, type = "response")
-```
-
-``` r
-to_plot <- test_transformed |> 
-  bind_cols(data.frame("probabliliites" = probabilities_model_2)) |> 
-  bind_cols(mini_snorkel_grouped |> select(-fish_presence)) |> glimpse()
-```
-
-    ## Rows: 4,741
-    ## Columns: 28
-    ## Rowwise: 
-    ## $ depth_transformed                                   <dbl> -0.5238591, -0.378…
-    ## $ velocity_transformed                                <dbl> -0.1118426, 0.2139…
-    ## $ percent_submerged_aquatic_veg_inchannel_transformed <dbl> 1.0368603, -0.7803…
-    ## $ percent_undercut_bank_transformed                   <dbl> -0.1024662, -0.102…
-    ## $ surface_turbidity_transformed                       <dbl> 1.8785096, 1.88847…
-    ## $ fish_presence                                       <fct> 1, 0, 0, 0, 1, 0, …
-    ## $ fine_substrate_transformed                          <dbl> -0.2312380, -0.231…
-    ## $ sand_substrate_transformed                          <dbl> 1.3697741, 1.41390…
-    ## $ small_gravel_transformed                            <dbl> 0.02630361, 0.5567…
-    ## $ large_gravel_transformed                            <dbl> 0.35737163, -0.411…
-    ## $ cobble_substrate_transformed                        <dbl> 0.8083423, -0.8529…
-    ## $ boulder_substrate_transformed                       <dbl> -0.3762372, -0.376…
-    ## $ woody_debris_transformed                            <dbl> 1.9524380, -0.5139…
-    ## $ overhead_cover_transformed                          <dbl> -0.5214114, -0.521…
-    ## $ probabliliites                                      <dbl> 0.08742784, 0.0440…
-    ## $ depth                                               <dbl> 17, 19, 11, 12, 11…
-    ## $ velocity                                            <dbl> 0.22, 0.35, 1.95, …
-    ## $ percent_submerged_aquatic_veg_inchannel             <dbl> 10, 0, 0, 0, 30, 0…
-    ## $ percent_undercut_bank                               <dbl> 0, 0, 0, 0, 0, 0, …
-    ## $ surface_turbidity                                   <dbl> 20, 30, 30, 30, 10…
-    ## $ fine_substrate                                      <dbl> 0.00000, 0.00000, …
-    ## $ sand_substrate                                      <dbl> 34.064710, 42.5808…
-    ## $ small_gravel                                        <dbl> 13.784015, 27.5680…
-    ## $ large_gravel                                        <dbl> 20.618170, 6.87272…
-    ## $ cobble_substrate                                    <dbl> 8.395115, 0.000000…
-    ## $ boulder_substrate                                   <dbl> 0, 0, 0, 0, 0, 0, …
-    ## $ woody_debris                                        <dbl> 15, 0, 0, 0, 60, 0…
-    ## $ overhead_cover                                      <dbl> 0, 0, 0, 0, 0, 0, …
-
-``` r
-ggplot(to_plot, aes(x = surface_turbidity, y = probabilities)) +
-  geom_smooth()
-```
+    ## [[1]]
 
     ## `geom_smooth()` using method = 'gam' and formula = 'y ~ s(x, bs = "cs")'
 
-![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+    ## Warning: Computation failed in `stat_smooth()`
+    ## Caused by error in `smooth.construct.cr.smooth.spec()`:
+    ## ! x has insufficient unique values to support 10 knots: reduce k.
 
-``` r
-ggplot(to_plot, aes(x = overhead_cover, y = probabilities)) +
-  geom_smooth()
-```
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
 
-    ## `geom_smooth()` using method = 'gam' and formula = 'y ~ s(x, bs = "cs")'
-
-![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-11-2.png)<!-- -->
-
-``` r
-ggplot(to_plot, aes(x = woody_debris, y = probabilities)) +
-  geom_smooth()
-```
+    ## 
+    ## [[2]]
 
     ## `geom_smooth()` using method = 'gam' and formula = 'y ~ s(x, bs = "cs")'
 
-![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-11-3.png)<!-- -->
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-10-2.png)<!-- -->
 
-``` r
-ggplot(to_plot, aes(x = small_gravel, y = probabilities)) +
-  geom_smooth()
-```
+    ## 
+    ## [[3]]
 
     ## `geom_smooth()` using method = 'gam' and formula = 'y ~ s(x, bs = "cs")'
 
-![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-11-4.png)<!-- -->
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-10-3.png)<!-- -->
+
+    ## 
+    ## [[4]]
+
+    ## `geom_smooth()` using method = 'gam' and formula = 'y ~ s(x, bs = "cs")'
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-10-4.png)<!-- -->
+
+    ## 
+    ## [[5]]
+
+    ## `geom_smooth()` using method = 'gam' and formula = 'y ~ s(x, bs = "cs")'
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-10-5.png)<!-- -->
+
+    ## 
+    ## [[6]]
+
+    ## `geom_smooth()` using method = 'gam' and formula = 'y ~ s(x, bs = "cs")'
+
+![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-10-6.png)<!-- -->
 
 ``` r
-ggplot(to_plot, aes(x = percent_undercut_bank, y = probabilities)) +
-  geom_point()
+# exploratory to see if we want to change the thresold? 
+# hard_pred_0.5 <- predictions |> 
+#   mutate(.pred = probably::make_two_class_pred(
+#       estimate = .pred_1,
+#       levels = levels(fish_presence),
+#       threshold = .5))  |> 
+#   select(fish_presence, contains(".pred"))
+# 
+# hard_pred_0.5 %>%
+#   count(.truth = fish_presence, .pred)
 ```
 
-![](feather_river_mini_snorkel_hsi_workflow_files/figure-gfm/unnamed-chunk-11-5.png)<!-- -->
+#### Create Logistic Regression
 
 ## Checks
 
 - Sample size of presence observations
-- remove month
 - stepwise
-- fix plots to not use scaled values
 
 ``` r
 knitr::knit_exit()

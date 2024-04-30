@@ -16,6 +16,14 @@ knitr::opts_chunk$set(echo = TRUE)
 
 theme_set(theme_minimal())
 
+ihs <- trans_new("ihs", 
+                 transform = function(x) asinh(x), 
+                 inverse = function(y) sinh(y), 
+                 breaks = function(i) scales::breaks_log(n=5, base=10)(pmax(i,0.01)), 
+                 #minor_breaks = scales::minor_breaks_n(n = 0),
+                 domain=c(0, Inf),
+                 format = scales::label_comma())
+
 ```
 
 ```{r}
@@ -98,7 +106,6 @@ HSC comparison
 ```{r}
 
 mini_snorkel_model_ready <- mini_snorkel |> 
-  #select(depth:percent_cover_more_than_half_meter_overhead, count, channel_geomorphic_unit, species) |> 
   mutate(fish_presence = as.factor(ifelse(count < 1, "0", "1")))
 
 ```
@@ -146,7 +153,6 @@ heatmap(cor_matrix,
 
 -   Surface Turbidity
 
-
 #### Normalize Substrate by Prevalence
 
 This table provides a weighting for each substrate type based on the
@@ -186,8 +192,8 @@ mini_snorkel_grouped <- mini_snorkel_model_ready |>
          ) |> 
   select(-c(percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_cover_more_than_half_meter_overhead, percent_cover_half_meter_overhead)) |> 
   #filter(species == "Chinook salmon" | is.na(species)) |> 
-  select(-count, -channel_geomorphic_unit, -species, -micro_hab_data_tbl_id, -location_table_id, -fish_data_id,
-         -focal_velocity, -dist_to_bottom, -fl_mm, -transect_code, -date) |> 
+  select(-count, -channel_geomorphic_unit, -micro_hab_data_tbl_id, -location_table_id, -fish_data_id,
+         -focal_velocity, -dist_to_bottom, -fl_mm, -species,  -transect_code, -date) |> 
   select(-(contains("no_cover"))) |> 
   distinct() |> 
   na.omit() |> 
@@ -224,16 +230,16 @@ library(AppliedPredictiveModeling)
 transparentTheme(trans = .4)
 library(caret)
 
-mini_snorkel_by_species <- mini_snorkel_model_ready |> 
-  filter(!is.na(species))
+mini_snorkel_by_species <- mini_snorkel_grouped |> Matrix::as.matrix() 
 
-featurePlot(x = mini_snorkel_by_species, 
-            y = mini_snorkel_by_species$species, 
+featurePlot(x = as.numeric(mini_snorkel_by_species[,1]), 
+            y = mini_snorkel_by_species[,6], 
             plot = "ellipse",
             ## Add a key at the top
             auto.key = list(columns = 3))
 
 ```
+
 ```{r eval=FALSE, include=FALSE}
 descrCor <-  cor(mini_snorkel_grouped)
 highCorr <- sum(abs(descrCor[upper.tri(descrCor)]) > .999)
@@ -241,13 +247,24 @@ highCorr <- sum(abs(descrCor[upper.tri(descrCor)]) > .999)
 comboInfo <- findLinearCombos(mini_snorkel_grouped |> as_tibble() |>  select(-fish_presence))
 
 ```
-Normalized data 
+
+Normalized and Center the data
+
+* 
 
 ```{r}
 library(caret)
 
 test <- caret::preProcess(mini_snorkel_grouped, method = c("center", "scale", "YeoJohnson"))
 test
+
+# Yeo Johnson:
+test[["method"]][["YeoJohnson"]]
+
+test[["method"]][["center"]]
+
+test[["method"]][["scale"]]
+
 
 test_transformed <- predict(test, mini_snorkel_grouped) |> na.omit()
 
@@ -256,11 +273,77 @@ names(test_transformed) <- paste0(names(test_transformed), "_transformed")
 test_transformed <- test_transformed |> rename(fish_presence = fish_presence_transformed)
 
 
+ggplot() +
+  geom_histogram(data = test_transformed, aes(depth_transformed)) 
+
+ggplot() +
+geom_histogram(data = mini_snorkel_grouped, aes(log(depth)), alpha = 0.5)
+
+# ggplot() +
+#   geom_histogram(data = test_transformed, aes(overhead_cover_transformed)) 
+# 
+# ggplot() +
+# geom_histogram(data = mini_snorkel_grouped, aes(overhead_cover), alpha = 0.5)
+
+
+
+```
+
+```{r}
+options(scipen=999)
+
+
+# Split the data into training and testing sets
+data_split <- initial_split(mini_snorkel_grouped, prop = 0.8, strata = "fish_presence")
+data_train <- training(data_split)
+data_test <- testing(data_split)
+
+recipe <- recipe(data = mini_snorkel_grouped, formula = fish_presence ~.) |> 
+  step_mutate_at(all_numeric_predictors(), fn = asinh) |> 
+  step_naomit(all_predictors()) |> 
+  step_zv(all_predictors()) |> 
+  step_normalize(all_numeric_predictors())
+
+log_reg <- logistic_reg() |> 
+  set_engine("glm") 
+
+log_reg_model <- workflow() |>
+  add_recipe(recipe) |>
+  add_model(log_reg) |> 
+  fit(data = mini_snorkel_grouped)
+
+log_reg_model |> glance()
+log_reg_model |> tidy() |> filter(p.value < 0.1)
+
+sig_predictors <- log_reg_model |> tidy() |> filter(p.value < 0.1) |> filter(term != "(Intercept)") |>  pull(term)
+
+print(sig_predictors)
+
+predictions <- predict(log_reg_model, mini_snorkel_grouped, type = "prob") |> 
+  bind_cols(mini_snorkel_grouped) |> glimpse()
+
+map(sig_predictors, function(predictor) {
+  ggplot(predictions, aes_string(x = predictor, y = ".pred_1")) +
+    geom_smooth() +
+    labs(title = paste("Predicted Probability vs.", predictor))
+})
+
+
+# exploratory to see if we want to change the thresold? 
+# hard_pred_0.5 <- predictions |> 
+#   mutate(.pred = probably::make_two_class_pred(
+#       estimate = .pred_1,
+#       levels = levels(fish_presence),
+#       threshold = .5))  |> 
+#   select(fish_presence, contains(".pred"))
+# 
+# hard_pred_0.5 %>%
+#   count(.truth = fish_presence, .pred)
 ```
 
 #### Create Logistic Regression
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 model <- glm(fish_presence ~., data = test_transformed, family = binomial)
 
 probabilities <- predict(model, type = "response")
@@ -299,15 +382,21 @@ car::vif(model_2)
 
 summary(model_2)
 
-probabilities_model_2 <- predict(model_2, type = "response")
+model_3 <- stats::step(model, test = "LRT")
+summary(model_3)
+
+
+probabilities_model_3 <- predict(model_3, type = "response")
 
 
 ```
 
+```{r eval=FALSE, include=FALSE}
+probabilities_model_3 <- predict(model_3, newdata = mini_snorkel_grouped, type = "response")
+hist(probabilities_model_3)
 
-```{r}
 to_plot <- test_transformed |> 
-  bind_cols(data.frame("probabliliites" = probabilities_model_2)) |> 
+  bind_cols(data.frame("probabliliites" = probabilities_model_3)) |> 
   bind_cols(mini_snorkel_grouped |> select(-fish_presence)) |> glimpse()
 
 ggplot(to_plot, aes(x = surface_turbidity, y = probabilities)) +
@@ -320,7 +409,8 @@ ggplot(to_plot, aes(x = woody_debris, y = probabilities)) +
   geom_smooth()
 
 ggplot(to_plot, aes(x = small_gravel, y = probabilities)) +
-  geom_smooth()
+ geom_point() + 
+   geom_smooth()
 
 ggplot(to_plot, aes(x = percent_undercut_bank, y = probabilities)) +
   geom_point()
@@ -331,8 +421,8 @@ ggplot(to_plot, aes(x = percent_undercut_bank, y = probabilities)) +
 library(patchwork)
 library(ggeffects)
 
-plts = lapply(names(coefficients(model_2))[-1],function(i){
-       return(plot(ggpredict(model_2,i)))
+plts = lapply(names(coefficients(model_3))[-1],function(i){
+       return(plot(ggpredict(model_3,i)))
        })
 
 #wrap_plots(plts)
@@ -343,8 +433,9 @@ plts
 ```
 
 ## Checks
-* Sample size of presence observations 
-* stepwise 
+
+-   Sample size of presence observations
+-   stepwise
 
 ```{r}
 knitr::knit_exit()
@@ -850,7 +941,6 @@ ggplot(sub_to_hsi, aes(x = substrate, y = hsi)) +
 
 
 ```
-
 
 ### Mapping of Substrate and Cover
 
