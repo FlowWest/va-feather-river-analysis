@@ -1,30 +1,21 @@
 ---
-title: "Feather River - data exploration"
+title: "Feather River - habitat data exploration"
 author: "Ashley Vizek (FlowWest)"
 date: "`r Sys.Date()`"
-output: rmarkdown::github_document
+output: 
+  html_document
 ---
 
 # Overview
 
-The goal of this document is guide the development of habitat suitability analyses including (1) explore the distributions of and correlations between key variables, (2) testing key methods
+The goal of this document is guide the development of habitat suitability analyses including (1) explore the distributions of and correlations between key variables, (2) test analysis methods to understand relationships
 
-Feather River will be used a case study location. There are two relevant datasets (1) mini snorkel data, and (2) the intermediate level ongoing snorkel survey. These data are collecting utilizing different methodologies and part of these analyses will explore the differences between these two data collection methods and resulting habitat.
+Feather River will be used as a case study location with the goal of creating a more streamlined workflow that could be applied elsewhere. There are two relevant datasets (1) mini snorkel data, and (2) the intermediate level ongoing snorkel survey. These data are utilizing different methodologies and part of these analyses will explore the differences between these two data collection methods and resulting habitat.
 
-```{r, include = F}
+```{r, include = F, message = F, warning = F}
 library(tidyverse)
 library(googleCloudStorageR)
-
-
-# google cloud set up
-gcs_auth(json_file = Sys.getenv("GCS_AUTH_FILE"))
-gcs_global_bucket(bucket = Sys.getenv("GCS_DEFAULT_BUCKET"))
-
-# get data from google cloud
-gcs_get_object(object_name = "juvenile-rearing-monitoring/seine-and-snorkel-data/feather-river/data/combined_feather_snorkel_data.csv",
-               bucket = gcs_get_global_bucket(),
-               saveToDisk =  here::here("data-raw", "combined_feather_snorkel_data.csv"),
-               overwrite = TRUE)
+knitr::opts_chunk$set(warning = F, message = F)
 
 combined_snorkel <- read_csv(here::here("data-raw", "combined_feather_snorkel_data.csv"))
 
@@ -42,11 +33,7 @@ location_raw <- read_csv(here::here("data-raw", "survey_locations.csv"))
 - 136 locations were sampled between March and August 2001 (approx 24 per month)
 - 4,891 quadrats (approx 36 per location)
 
-*TODO*
-- confirm the scale of cover/substrate measurements (for the entire quadrat fish was observed?)
-
-```{r}
-# TODO
+```{r, include = F}
 # We are missing 76 locations from the location table
 check_location <- mini_snorkel_raw |> 
   left_join(location_raw |> 
@@ -60,7 +47,7 @@ mini_snorkel_raw |> group_by(location_table_id) |> summarize(n_quadrats = length
 ```
 
 
-**Key Variables**
+**Key variables**
  
  - depth: depth, dist_to_bottom
  - velocity: velocity, focal_velocity
@@ -68,15 +55,15 @@ mini_snorkel_raw |> group_by(location_table_id) |> summarize(n_quadrats = length
  - cover: percent_no_cover_inchannel, percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_instream, percent_undercut_bank, percent_no_cover_overhead, percent_half_meter_overhead, percent_cover_more_than_half_meter
  - substrate: percent_fine_substrate, percent_sand_substrate, percent_small_gravel_substrate, percent_large_gravel_substrate, percent_cobble_substrate, percent_boulder_substrate
  
-**Data Processing**
+**Data processing considerations**
 
-- Species: Analyses should be performed for chinook and steelhead separately or maybe if we determine there is a strong species affect can lump together. 
-- Fork length: If there is a wide variation in fork length and ruleset should be use to differentiate between lifestages and analyses should be performed separately for each analyses. 
-- Reach/location: Some analyses have removed reaches where no fish are observed.
-- Absense/presence: May want to consider random selecting from the "unoccupied" observations to simulate paired random selection (?)
+- Species: Analyses should be performed for chinook and steelhead separately or maybe if we determine there is not a strong species affect can lump together. 
+- Fork length: If there is a wide variation in fork length a ruleset should be used to differentiate between lifestages and analyses should be performed separately for each lifestage. 
+- Reach/location: Some of the past analyses have removed reaches where no fish are observed; need to consider if that is something we want to do.
+- Absence/presence: May want to consider randomly selecting from the "unoccupied" observations to simulate paired random selection (?)
 - Cover: These fields can be treated in many different ways. (1) Each can function as percent cover (though the "no cover" should be removed because they are different). (2) They can be transformed to a binary variable (cover/no cover), (3) two binary variables (instream, overhead), (4) They can also be treated as multiple binary variables where percent greater than 20% is counted as presence
 
-## Distributions of key variables
+## Distributions of key variables {.tabset}
            
 ```{r, include = F}
 # code to check and look at variables
@@ -94,7 +81,7 @@ ck <- mini_snorkel_raw |>
 
 Chinook, steelhead, tule perch, and speckeled dace are observed
 
-```{r}
+```{r, include = F}
 unique(mini_snorkel_raw$species)
 ```
 
@@ -104,7 +91,7 @@ unique(mini_snorkel_raw$species)
 
 Most Chinook observations are for fry (~40mm)
 
-```{r}
+```{r, echo = F}
 mini_snorkel_raw |> 
   filter(species == "Chinook salmon") |> 
   ggplot(aes(x = fl_mm)) +
@@ -115,7 +102,7 @@ mini_snorkel_raw |>
 
 Most steelhead observations are for smaller fish but there is some variation.
 
-```{r}
+```{r, echo = F}
 mini_snorkel_raw |> 
   filter(grepl("Steelhead", species)) |> 
   ggplot(aes(x = fl_mm)) +
@@ -125,14 +112,16 @@ mini_snorkel_raw |>
 ### depth
 
 **depth of microhabitat**
-```{r}
+
+```{r, echo = F}
 mini_snorkel_raw |> 
   ggplot(aes(x = depth)) +
   geom_density()
 ```
 
 **depth of fish observation**
-```{r}
+
+```{r, echo = F}
 mini_snorkel_raw |> 
   ggplot(aes(x = dist_to_bottom)) +
   geom_density()
@@ -142,14 +131,19 @@ mini_snorkel_raw |>
 ### velocity
 
 **velocity of microhabitat**
-```{r}
+
+```{r, echo = F}
 mini_snorkel_raw |> 
   ggplot(aes(x = velocity)) +
   geom_density()
+
+ck <- mini_snorkel_raw |> 
+  mutate(depth_scaled = scale(depth))
 ```
 
 **velocity of fish observations**
-```{r}
+
+```{r, echo = F}
 mini_snorkel_raw |> 
   ggplot(aes(x = focal_velocity)) +
   geom_density()
@@ -158,7 +152,8 @@ mini_snorkel_raw |>
 ### count
 
 **count of all species**
-```{r}
+
+```{r, echo = F}
 mini_snorkel_raw |> 
   ggplot(aes(x = count)) +
   geom_density()
@@ -168,7 +163,7 @@ mini_snorkel_raw |>
 
 Most observations are of Chinook salmon
 
-```{r}
+```{r, echo = F}
 mini_snorkel_raw |> 
   group_by(species) |> 
   summarize(count = sum(count, na.rm = T)) |> 
@@ -178,7 +173,8 @@ mini_snorkel_raw |>
 ```
 
 **count of chinook**
-```{r}
+
+```{r, echo = F}
 mini_snorkel_raw |> 
   filter(species == "Chinook salmon") |> 
   ggplot(aes(x = count)) +
@@ -186,7 +182,8 @@ mini_snorkel_raw |>
 ```
 
 **count of steelhead (wild)**
-```{r}
+
+```{r, echo = F}
 mini_snorkel_raw |> 
   filter(species == "Steelhead trout (wild)") |> 
   ggplot(aes(x = count)) +
@@ -194,7 +191,8 @@ mini_snorkel_raw |>
 ```
 
 **count of steelhead (clipped)**
-```{r}
+
+```{r, echo = F}
 mini_snorkel_raw |> 
   filter(species == "Steelhead trout, (clipped)") |> 
   ggplot(aes(x = count)) +
@@ -205,7 +203,7 @@ mini_snorkel_raw |>
 
 **summary of percent cover by cover type where cover > 0% and Chinook salmon observed**
 
-```{r}
+```{r, echo = F}
 # pivots cover type variable
 mini_snorkel_cover_long_format <- mini_snorkel_raw |> 
   pivot_longer(cols = c(percent_no_cover_inchannel, percent_small_woody_cover_inchannel,
@@ -220,9 +218,9 @@ mini_snorkel_cover_long_format |>
   theme(axis.text.x = element_text(angle = 45))
 ```
 
-**summary of percent cover by cover type where cover > 0% and Chinook salmon observed**
+**summary of percent cover by cover type where cover > 0% and Steelhead observed**
 
-```{r}
+```{r, echo = F}
 # distribution of percent cover by type where fish are observed
 mini_snorkel_cover_long_format |> 
   filter(percent > 0, !cover_type %in% c("percent_no_cover_inchannel", "percent_no_cover_overhead", grepl("Steelhead", species))) |> 
@@ -230,19 +228,24 @@ mini_snorkel_cover_long_format |>
   geom_boxplot() +
   theme(axis.text.x = element_text(angle = 45))
 ```
+
 ### percent cover by transect code
 
 The following plots summarize percent cover by type and transect code to help describe the types of habitats surveyed. This information needs to be summarized better.
 
 **small woody cover**
-```{r}
+
+```{r, echo = F}
 mini_snorkel_raw |> 
   filter(percent_small_woody_cover_inchannel > 0) |> 
   distinct(transect_code, .keep_all = T) |> 
   ggplot(aes(x = transect_code, y = percent_small_woody_cover_inchannel)) +
   geom_col()
 ```
-```{r}
+
+**large woody cover**
+
+```{r, echo = F}
 mini_snorkel_raw |> 
   filter(percent_large_woody_cover_inchannel > 0) |> 
   distinct(transect_code, .keep_all = T) |> 
@@ -250,8 +253,9 @@ mini_snorkel_raw |>
   geom_col()
 ```
 
+**submerged vegetation**
 
-```{r}
+```{r, echo = F}
 mini_snorkel_raw |> 
   filter(percent_submerged_aquatic_veg_inchannel > 0) |> 
   distinct(transect_code, .keep_all = T) |> 
@@ -259,21 +263,29 @@ mini_snorkel_raw |>
   geom_col()
 ```
 
-```{r}
+**undercut bank**
+
+```{r, echo = F}
 mini_snorkel_raw |> 
   filter(percent_undercut_bank > 0) |> 
   distinct(transect_code, .keep_all = T) |> 
   ggplot(aes(x = transect_code, y = percent_undercut_bank)) +
   geom_col()
 ```
-```{r}
+
+**half meter overhead**
+
+```{r, echo = F}
 mini_snorkel_raw |> 
   filter(percent_cover_half_meter_overhead > 0) |> 
   distinct(transect_code, .keep_all = T) |> 
   ggplot(aes(x = transect_code, y = percent_cover_half_meter_overhead)) +
   geom_col()
 ```
-```{r}
+
+**more than half meter overhead**
+
+```{r, include = F}
 mini_snorkel_raw |> 
   filter(percent_cover_more_than_half_meter_overhead > 0) |> 
   distinct(transect_code, .keep_all = T) |> 
@@ -287,7 +299,9 @@ We transformed cover to presence/absence. If any of the cover types are > 20% th
 
 **instream cover presence (1) and absence (0) for Chinook salmon**
 
-```{r}
+Instream cover means any of the instream cover types greater than 20%
+
+```{r, echo = F}
 mini_snorkel_cover_presence <- mini_snorkel_raw |> 
   mutate(instream_cover = as.factor(ifelse(percent_small_woody_cover_inchannel > 20 | percent_large_woody_cover_inchannel > 20 | percent_submerged_aquatic_veg_inchannel > 20 | percent_undercut_bank, 1, 0)),
          overhead_cover = as.factor(ifelse(percent_cover_half_meter_overhead > 20 | percent_cover_more_than_half_meter_overhead > 20, 1, 0)))
@@ -302,7 +316,9 @@ mini_snorkel_cover_presence |>
 
 **overhead cover presence (1) and absence (0) for Chinook salmon**
 
-```{r}
+Overhead cover means any of the overhead cover types greater than 20%
+
+```{r, echo = F}
 mini_snorkel_cover_presence |> 
   filter(species == "Chinook salmon") |> 
   group_by(overhead_cover) |> 
@@ -313,7 +329,7 @@ mini_snorkel_cover_presence |>
 
 **instream cover presence (1) and absence (0) for Steelhead**
 
-```{r}
+```{r, echo = F}
 mini_snorkel_cover_presence |> 
   filter(grepl("Steelhead", species)) |> 
   group_by(instream_cover) |> 
@@ -324,7 +340,7 @@ mini_snorkel_cover_presence |>
 
 **overhead cover presence (1) and absence (0) for Steelhead**
 
-```{r}
+```{r, echo = F}
 mini_snorkel_cover_presence |> 
   filter(grepl("Steelhead", species)) |> 
   group_by(overhead_cover) |> 
@@ -375,7 +391,7 @@ relative_abundance_chinook |>
   geom_col()
 ```
 
-```{r}
+```{r, include = F}
 mini_percent_cover <- mini_snorkel_raw |> 
   select(percent_no_cover_inchannel, percent_small_woody_cover_inchannel,
                         percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel,
@@ -383,16 +399,17 @@ mini_percent_cover <- mini_snorkel_raw |>
   
 ```
 
-```{r}
+```{r, include = F}
 library("psych")
 pairs.panels(mini_percent_cover)
-pairs.panels(chinook_for_cluster_cover)
 ```
-## Correlations
+
+## Correlations {.tabset}
 
 Checked the correlations between cover and substrate and did not find any highly correlated.
 
 No correlations between distance to bottom and velocty.
+
 
 ### Cover
 
@@ -410,7 +427,7 @@ mini_percent_substrate <- mini_snorkel_raw |>
   select(percent_fine_substrate, percent_sand_substrate, percent_small_gravel_substrate, percent_large_gravel_substrate, percent_cobble_substrate, percent_boulder_substrate, dist_to_bottom, velocity)
 ```
 
-```{r}
+```{r, echo = F}
 library("psych")
 pairs.panels(mini_percent_cover)
 ```
@@ -419,13 +436,19 @@ pairs.panels(mini_percent_cover)
 
 None of the percent cover substrate variables are correlated.
 
-```{r}
+```{r, echo = F}
 pairs.panels(mini_percent_substrate)
 ```
 
 ## Cluster analysis
 
 The goal of the cluster analysis is to identify groupings of fish observations and what best describes those groupings. Unlike typical habitat analysis this will just focus on characteristics of fish observations.
+
+**TODO**
+
+- consider the results with count - maybe this makes sense because the count is so skewed.
+- try with a density variable
+- try removing the high count variables
 
 **Key variables**
 
@@ -438,13 +461,38 @@ The goal of the cluster analysis is to identify groupings of fish observations a
 - some measure of cover
 - some measure of substrate
 
+**Data inputs**
+
+I tried the cluster analysis multiple times with slight variations in the data used. These are the data ultimately included:
+
+- dist_to_bottom
+- focal_velocity
+- percent_small_gravel_substrate
+- percent_large_gravel_substrate
+- percent_cobble_substrate
+- percent_boulder_substrate,
+- percent_small_woody_cover_inchannel
+- percent_large_woody_cover_inchannel
+- percent_submerged_aquatic_veg_inchannel
+- percent_undercut_bank
+- percent_cover_half_meter_overhead
+- surface_turbidity
+- species_cat (categorized chinook as 1, steelhead as 2 and other as 3)
+- month (transformed date of observation to month)
+
+**Notes**
+- if we add count or fl_mm to the above results we end up with one really big cluster and 2 smaller ones
+- if we remove the substrate variables and add count we end up with one really big cluster and 2 smaller ones
+- if we do not filter data to only fish observations and include count we end up with 4 clusters where 3 are large (~1500) and one is about 500. This may be worth digging into a little further.
+- was thinking that maybe we would see a fl_mm effect but i think there are too few large fish. decided to filter out large fish as this is not the target of the study and therefore may be leading to erroneous results.
+
 ```{r, include = F}
 # 1. Define the dataset - select the variables to include
 
 # Todo need to decide if it is an issue if the percent cover values add to 1
 
 cluster_data <- mini_snorkel_raw |> 
-  filter(count > 0) |> # filter to only include fish observations. i think makes the most sense because we are asking are there clusters of habitat characteristics that fish use 
+  filter(count > 0, fl_mm < 100) |> # filter to only include fish observations. i think makes the most sense because we are asking are there clusters of habitat characteristics that fish use. Also filtered to juvenile fish (about 11 fish that are adult size)
   mutate(month = month(date),
          species_cat = case_when(species == "Chinook salmon" ~ 1,
                                  grepl("Steelhead", species) ~ 2,
@@ -487,12 +535,15 @@ cluster_data <- mini_snorkel_raw |>
 # Run the hierarchical cluster analysis
 clusters <- hclust(dist(cluster_data), method = "ward.D2")
 # Dendrogram plot (need to make a prettier one)
-# plot(clusters)
 ```
 
-**Number of clusters**
+**Dendrogram of clusters**
 
-Based on analysis of multiple indices, 3 clusters is the best fit. Note that this could be looked into further to confirm this is the best number of clusters.
+The dendrogram visualizes the connections between datapoints. Need to clean this plot up.
+
+```{r, echo = F}
+plot(clusters)
+```
 
 ```{r, include = F}
 # Evaluating clusters
@@ -513,8 +564,15 @@ res <- NbClust(data = cluster_data, method = "ward.D2")
 # frey = 1
 # mcclain = 2
 # dunn = 2
-NbClust(data = cluster_data, method = "ward.D2", index = "dunn")
+# NbClust(data = cluster_data, method = "ward.D2", index = "dunn")
 # Function for scree plot
+```
+
+**Scree plot**
+
+The elbow of the scree plot visualizes the ideal number of clusters.
+
+```{r, echo = F}
 scree <- function(hclust.obj, max.size = 12) {
 temp <- with(hclust.obj, cbind(height, merge))
 colnames(temp) <- c("Height", "JoinsThis", "WithThis")
@@ -531,12 +589,18 @@ scree(hclust.obj = clusters)
 # Assign clusters
 
 # Function to cut tree into the selected number of clusters
-three_clusters <- cutree(clusters, k = 3)
-table(three_clusters)
+cluster_groups <- cutree(clusters, k = 4)
+table(cluster_groups)
 
 # add cluster assignments to the data so we can summarize
 cluster_assign <- cluster_data |> 
-  cbind(three_clusters)
+  cbind(cluster_groups) |> 
+  mutate(cluster_groups = factor(cluster_groups))
+
+cluster_data_post <- mini_snorkel_raw |> 
+  filter(count > 0, fl_mm < 100) |> 
+  cbind(cluster_groups) |> 
+  mutate(cluster_groups = factor(cluster_groups))
 ```
 
 ```{r, include = F}
@@ -552,114 +616,363 @@ cluster_assign <- cluster_data |>
 # summarize depth
 # 1 - deepest
 # 2 and 3 - similar
+#if add 4, 4 is similar to 2-3
 cluster_assign |> 
-  group_by(three_clusters) |> 
+  group_by(cluster_groups) |> 
   summarize(mean = mean(dist_to_bottom),
             median = median(dist_to_bottom))
+```
 
+```{r, include = F}
 # summarize velocity
 # 3 - highest velocity
 # 1 and 2 - similar
+# 4 is the lowest velocity
 cluster_assign |> 
-  group_by(three_clusters) |> 
+  group_by(cluster_groups) |> 
   summarize(mean = mean(focal_velocity, na.rm = T),
             median = median(focal_velocity, na.rm = T))
+```
 
+```{r, include= F}
 # surface turbidity
 # 3: most turbid
-# 2: least
+# 2: least (if add 4 then 4 is least)
 # 1 in middle
 cluster_assign |> 
-  group_by(three_clusters) |> 
+  group_by(cluster_groups) |> 
   summarize(mean = mean(surface_turbidity, na.rm = T),
             median = median(surface_turbidity, na.rm = T))
+```
 
+```{r, include = F}
 # summarize month
 # very similar in terms of month
 cluster_assign |> 
-  group_by(three_clusters) |> 
+  group_by(cluster_groups) |> 
   summarize(mean = mean(month, na.rm = T),
             median = median(month, na.rm = T))
+```
 
+```{r, include = F}
 # summarize small woody
 # 2: highest
-# 1 and 3: similar
+# 1 and 3: similar ( and 4)
 cluster_assign |> 
-  group_by(three_clusters) |> 
+  group_by(cluster_groups) |> 
   summarize(mean = mean(percent_small_woody_cover_inchannel, na.rm = T),
             median = median(percent_small_woody_cover_inchannel, na.rm = T))
+```
 
+```{r, include = F}
 # summarize large woody
 # 2: highest
-# 1 and 3: none
+# 1 and 3: none (4 only small amount)
 cluster_assign |> 
-  group_by(three_clusters) |> 
+  group_by(cluster_groups) |> 
   summarize(mean = mean(percent_large_woody_cover_inchannel, na.rm = T),
             median = median(percent_large_woody_cover_inchannel, na.rm = T))
+```
 
+```{r, include = F}
 # summarize aquatic
-# 2: highest
-# 1 and 3: similar
+# 2: highest (4 much higher)
+# 1 and 3: similar (and 2)
 cluster_assign |> 
-  group_by(three_clusters) |> 
+  group_by(cluster_groups) |> 
   summarize(mean = mean(percent_submerged_aquatic_veg_inchannel, na.rm = T),
             median = median(percent_submerged_aquatic_veg_inchannel, na.rm = T))
+```
 
+```{r, include = F}
 # summarize undercut
-# 3: none
-# 1 and 2: similar
+# 3: none (4 very little)
+# 1 and 2: similar 
 cluster_assign |> 
-  group_by(three_clusters) |> 
+  group_by(cluster_groups) |> 
   summarize(mean = mean(percent_undercut_bank, na.rm = T),
             median = median(percent_undercut_bank, na.rm = T))
+```
 
+```{r, include = F}
 # summarize half meter
 # 2: highest
 # 1 and 3: less and similar
+# 4 in the middle
 cluster_assign |> 
-  group_by(three_clusters) |> 
+  group_by(cluster_groups) |> 
   summarize(mean = mean(percent_cover_half_meter_overhead, na.rm = T),
             median = median(percent_cover_half_meter_overhead, na.rm = T))
+```
 
-
+```{r, include = F}
 # summarize species
 # all clusters have similar proportions of chinook and steelhead...
+# 4 has more steelhead
 cluster_assign |> 
-  group_by(three_clusters, species_cat) |> 
+  group_by(cluster_groups, species_cat) |> 
   tally()
 # by percent
-cluster_assign |> 
-  group_by(three_clusters, species_cat) |> 
+percent <- cluster_assign |> 
+  group_by(cluster_groups, species_cat) |> 
   tally() |> 
-  group_by(three_clusters) |> 
+  group_by(cluster_groups) |> 
   mutate(total = sum(n),
          prop = n/total)
 
-cluster_data_post <- mini_snorkel_raw |> 
-  filter(count > 0) |> 
-  cbind(three_clusters)
+percent |> 
+  ggplot(aes(x = cluster_groups, y = prop, fill = as.factor(species_cat))) +
+  geom_col()
+```
+
+```{r, include = F}
+
 
 # summarize count
 # pretty similar counts
+# 2 and 3 have some larger counts
+# no big differences though
+
 cluster_data_post |> 
-  group_by(three_clusters) |> 
+  group_by(cluster_groups) |> 
   summarize(mean = mean(count, na.rm = T),
             median = median(count, na.rm = T))
 
+cluster_data_post |> 
+  filter(count < 100) |> 
+  ggplot(aes(x = as.factor(cluster_groups), y = count)) +
+  geom_boxplot()
+```
 
+```{r, include = F}
+# summarize fl_mm
+# pretty similar counts
+# smaller fork length for cluster 4 but not by much
+cluster_data_post |> 
+  group_by(cluster_groups) |> 
+  summarize(mean = mean(fl_mm, na.rm = T),
+            median = median(fl_mm, na.rm = T))
 
+cluster_data_post |> 
+  filter(fl_mm < 100) |> 
+  ggplot(aes(x = as.factor(cluster_groups), y = fl_mm)) +
+  geom_boxplot()
+```
+
+```{r, include = F}
+# summarize small gravel
+# 3 high small gravel
+cluster_assign |> 
+  group_by(cluster_groups) |> 
+  summarize(mean = mean(percent_small_gravel_substrate, na.rm = T),
+            median = median(percent_small_gravel_substrate, na.rm = T))
+```
+
+```{r, include = F}
+# large gravel
+# 1 large gravel
+cluster_assign |> 
+  group_by(cluster_groups) |> 
+  summarize(mean = mean(percent_large_gravel_substrate, na.rm = T),
+            median = median(percent_large_gravel_substrate, na.rm = T))
+```
+```{r, include = F}
+# cobble
+# 1 a little
+# 3 no cobble (2 very little)
+# 4 high cobble
+cluster_assign |> 
+  group_by(cluster_groups) |> 
+  summarize(mean = mean(percent_cobble_substrate, na.rm = T),
+            median = median(percent_cobble_substrate, na.rm = T))
+```
+
+```{r, include = F}
+# boulder
+# 1 little boulder
+# 2 some boulder
+# 3 no boulder
+# 4 highest
+cluster_assign |> 
+  group_by(cluster_groups) |> 
+  summarize(mean = mean(percent_boulder_substrate, na.rm = T),
+            median = median(percent_boulder_substrate, na.rm = T))
+```
+
+### Results
+
+**Number of clusters**
+
+Based on analysis of multiple indices, 3-4 clusters is the best fit. Note that this could be looked into further to confirm this is the best number of clusters. I decided to go with 4 clusters based on the results of the scree plot.
+
+The 4 clusters have very similar numbers (and sizes) of fish observations across a similar distribution of months. The species observed are similar though the low velocity and high aquatic vegetation cluster has more steelhead. The defining characteristics include the following:
+
+- The deep cluster with large gravel
+- The high cover (large and small wood and overhead) cluster
+- The high(er) velocity cluster with no cobble or boulder and high small gravel
+- Lowest velocity and least turbid with high submerged aquatic vegetation, some boulder, and high cobble
+
+The following includes a number of plots that could be used to visualize these results
+
+```{r, include = F}
+# Make a pretty dendrogram plot
+```
+
+#### Depth and velocity
+
+There are small differences in local depth and velocity. There is a trend that can be observed but these results may not be significant. 
+
+```{r, echo = F}
+# cluster_assign |> 
+#   #filter(dist_to_bottom < 30) |> 
+#   ggplot(aes(x = cluster_groups, y = dist_to_bottom)) +
+#   geom_boxplot() +
+#   theme_bw() +
+#   labs(x = "",
+#        y = "Local distance to bottom (m)")
+# 
+# cluster_data_post |> 
+#   ggplot(aes(x = cluster_groups, y = depth)) +
+#   geom_boxplot()
+# 
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = focal_velocity)) +
+#   geom_boxplot()
+# 
+# cluster_data_post |> 
+#   ggplot(aes(x = cluster_groups, y = velocity)) +
+#   geom_boxplot()
+
+cluster_data_post |> 
+  select(cluster_groups, depth, velocity, surface_turbidity) |> 
+  pivot_longer(cols = c(depth, velocity, surface_turbidity), names_to = "parameter", values_to = "value") |> 
+  ggplot(aes(x = cluster_groups, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~parameter, scales ="free_y") +
+  theme_bw() +
+  labs(x = "",
+       y = "")
+
+ggsave("analysis/figures/environmental_boxplot.png", height = 7, width = 9)
+
+mini_snorkel_raw |> 
+  filter(is.na(count) | count == 0) |> 
+  select(cluster_groups, depth, velocity, surface_turbidity) |> 
+  mutate(cluster_groups = "no fish obs") |> 
+  pivot_longer(cols = c(depth, velocity, surface_turbidity), names_to = "parameter", values_to = "value") |> 
+  ggplot(aes(x = cluster_groups, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~parameter, scales ="free_y") +
+  theme_bw() +
+  labs(x = "",
+       y = "")
+
+```
+
+#### Substrate
+
+There very clear differences in percent of small gravel, large gravel, and cobble between groups. There are smaller differences in percent boulder.
+
+```{r, echo = F}
+cluster_assign |> 
+  select(cluster_groups, percent_small_gravel_substrate, percent_large_gravel_substrate, percent_cobble_substrate, percent_boulder_substrate) |> 
+  pivot_longer(cols = c(percent_small_gravel_substrate, percent_large_gravel_substrate, percent_cobble_substrate, percent_boulder_substrate), names_to = "parameter", values_to = "value") |> 
+  ggplot(aes(x = cluster_groups, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~parameter, scales ="free_y") +
+  theme_bw() +
+  labs(x = "",
+       y = "")
+
+ggsave("analysis/figures/substrate_boxplot.png", height = 7, width = 9)
+
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = percent_small_gravel_substrate)) +
+#   geom_boxplot()
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = percent_large_gravel_substrate)) +
+#   geom_boxplot()
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = percent_cobble_substrate)) +
+#   geom_boxplot()
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = percent_boulder_substrate)) +
+#   geom_boxplot()
+
+mini_snorkel_raw |> 
+  filter(is.na(count) | count == 0) |> 
+  select(cluster_groups, percent_small_gravel_substrate, percent_large_gravel_substrate, percent_cobble_substrate, percent_boulder_substrate) |> 
+  mutate(cluster_groups = "no fish obs") |> 
+  pivot_longer(cols = c(percent_small_gravel_substrate, percent_large_gravel_substrate, percent_cobble_substrate, percent_boulder_substrate), names_to = "parameter", values_to = "value") |> 
+  ggplot(aes(x = cluster_groups, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~parameter, scales ="free_y") +
+  theme_bw() +
+  labs(x = "",
+       y = "")
+```
+
+#### Cover
+
+There are very clear differences in percent submerged aquatic vegetation and percent cover overhead. There are smaller differences in percent small woody cover. There are small differences in percent large woody cover and undercut banks.
+
+```{r, echo = F}
+cover_boxplot <- cluster_assign |> 
+  select(cluster_groups, percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel, percent_undercut_bank, percent_cover_half_meter_overhead) |> 
+  pivot_longer(cols = c(percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel, percent_undercut_bank, percent_cover_half_meter_overhead), names_to = "parameter", values_to = "value") |> 
+  ggplot(aes(x = cluster_groups, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~parameter, scales ="free_y") +
+  theme_bw() +
+  labs(x = "",
+       y = "")
+
+ggsave("analysis/figures/cover_boxplot.png", height = 7, width = 9)
+
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = percent_submerged_aquatic_veg_inchannel)) +
+#   geom_boxplot()
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = percent_small_woody_cover_inchannel)) +
+#   geom_boxplot()
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = percent_large_woody_cover_inchannel)) +
+#   geom_boxplot()
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = percent_cover_half_meter_overhead)) +
+#   geom_boxplot()
+
+mini_snorkel_raw |> 
+  filter(is.na(count) | count == 0) |> 
+  select(percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel, percent_undercut_bank, percent_cover_half_meter_overhead) |> 
+  mutate(cluster_groups = "no fish obs") |> 
+  pivot_longer(cols = c(percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel, percent_undercut_bank, percent_cover_half_meter_overhead), names_to = "parameter", values_to = "value") |> 
+  ggplot(aes(x = cluster_groups, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~parameter, scales ="free_y") +
+  theme_bw() +
+  labs(x = "",
+       y = "")
+
+ggsave("analysis/figures/cover_no_fish_obs_boxplot.png", height = 7, width = 9)
 ```
 
 ## Occupancy modeling
 
-The goal here is to model presence/absence in a hierarchical bayesian framework. 
+*In progress*
+
+The goal here is to model presence/absence in a hierarchical Bayesian framework where there are repeat observations for a given site.
+
+We need to consider if the mini-snorkel data is set up appropriately to use with this modeling framework.
 
 Refer to: 
 Pascale's paper: https://onlinelibrary.wiley.com/doi/pdfdirect/10.1111/jfb.14143
+Mahardja 2021: https://escholarship.org/uc/item/9sp7r7q4 
 Another example: https://pubs.usgs.gov/of/2020/1100/ofr20201100.pdf
 
 ```{r, include = F}
 library(unmarked)
+# sets up mini snorkel data for occupancy model
 # habitat variables of interest based on literature
 # depth, velocity, substrate, cover
 
@@ -706,31 +1019,51 @@ quadrat_hab_vars <- quadrat_fish_obs |>
 # depth
 depth <- quadrat_hab_vars  |> 
   select(location_table_id, label, depth) |> 
-  mutate(label = paste0("depth.", label)) |> 
+  ungroup() |> 
+  mutate(label = paste0("depth.", label),
+         mean= mean(depth),
+         sd = sd(depth),
+         depth = ((depth - mean)/sd)) |> 
   pivot_wider(id_cols = location_table_id, names_from = "label", values_from = "depth")
 
 # velocity
 velocity <- quadrat_hab_vars  |> 
   select(location_table_id, label, velocity) |> 
-  mutate(label = paste0("velocity.", label)) |> 
+  ungroup() |> 
+  mutate(label = paste0("velocity.", label),
+         mean = mean(velocity, na.rm = T),
+         sd = sd(velocity, na.rm = T),
+         velocity = ((velocity - mean)/sd)) |> 
   pivot_wider(id_cols = location_table_id, names_from = "label", values_from = "velocity")
 
 # large sub
 large_sub <- quadrat_hab_vars  |> 
   select(location_table_id, label, percent_large_substrate) |> 
-  mutate(label = paste0("substrate.", label)) |> 
+  ungroup() |> 
+  mutate(label = paste0("substrate.", label),
+         mean = mean(percent_large_substrate),
+         sd = sd(percent_large_substrate),
+         percent_large_substrate = ((percent_large_substrate - mean)/sd)) |> 
   pivot_wider(id_cols = location_table_id, names_from = "label", values_from = "percent_large_substrate")
 
 # instream
 instream <- quadrat_hab_vars  |> 
   select(location_table_id, label, percent_instream_cover) |> 
-  mutate(label = paste0("instreamcover.", label)) |> 
+  ungroup() |> 
+  mutate(label = paste0("instreamcover.", label),
+         mean = mean(percent_instream_cover),
+         sd = sd(percent_instream_cover),
+         percent_instream_cover = ((percent_instream_cover - mean)/sd)) |> 
   pivot_wider(id_cols = location_table_id, names_from = "label", values_from = "percent_instream_cover")
 
 # overhead
 overhead <- quadrat_hab_vars  |> 
   select(location_table_id, label, percent_overhead_cover) |> 
-  mutate(label = paste0("overheadcover.", label)) |> 
+  ungroup() |> 
+  mutate(label = paste0("overheadcover.", label),
+         mean = mean(percent_overhead_cover),
+         sd = sd(percent_overhead_cover),
+         percent_overhead_cover = ((percent_overhead_cover - mean)/sd)) |> 
   pivot_wider(id_cols = location_table_id, names_from = "label", values_from = "percent_overhead_cover")
 
 y <- quadrat_fish_obs_wide[,2:37]
@@ -759,14 +1092,47 @@ plot(dat)
 #                  long = TRUE, type = "unmarkedFrameOccu")
 ```
 
-```{r}
+```{r, eval = F, include = F}
+# TODO need to better understand detection v occupancy
+# Considerations - should this be an open model because fish could be migrating downstream
+
+# ~ detection ~ occupancy
+
+# Null model
 fm1 <- occu(~1 ~1, dat)
+fm1
 
-fm2 <- occu(~ MinAfterSunset + Temperature ~ 1, pcru)
+fm2 <- occu(~depth+velocity ~1, dat)
+fm2
 
+# The expected probability that a site was occupied is 0.405. This estimate applies to the hypothetical population of all possible sites, not the sites found in our sample. For a good discussion of population-level vs finite-sample inference, see Royle and Dorazio (2008) page 117. Note also that finite-sample quantities can be computed in unmarked using empirical Bayes methods as demonstrated at the end of this document.
+backTransform(fm2, "state")
+
+# Thus, we can say that the expected probability of detection was 0.118 when depth, velocity, and instream cover are fixed at their mean value. 
+backTransform(linearComb(fm2, coefficients = c(1,0,0,0,0), type = 'det'))
+
+newData <- data.frame(depth = 0, velocity = -2:2, instream_cover = 0)
+newData <- data.frame(depth = -2:2, velocity = 0, instream_cover = 0)
+newData <- data.frame(depth = 0, velocity = 0, instream_cover = -2:2)
+round(predict(fm2, type = 'det', newdata = newData, appendData=TRUE), 2)
 ```
 
 # Intermediate Snorkel
+
+**This is currently in progress because there is still some data processing needed**
+
+```{r, include = F}
+
+# some records where units are NA. we may just want to get rid of those
+ongoing_snorkel_obs <- read_csv("data/cleaner_snorkel_observations.csv")
+ongoing_snorkel_metadata <- read_csv("data/cleaner_snorkel_metadata.csv")
+site_lookup <- read_csv("data/location_unit_lookup.csv")
+
+
+obs_ck <- ongoing_snorkel_obs |> 
+  left_join(site_lookup)
+```
+
 
 ## Data wrangling fixes for the intermediate snorkel data
 
@@ -774,3 +1140,108 @@ fm2 <- occu(~ MinAfterSunset + Temperature ~ 1, pcru)
 - Need to map cover and substrate to a hierarchy (e.g. Gard has a cover and substrate coding system)
 - We should double check the data Erin pulled from the database - was this filered to Chinook? We want all species
 - section_name, units_covered, unit, location, section_type, unit_type, section_number are all related to location. We need to do a better job getting these organized.
+
+## Distributions of key variables
+
+### species
+
+Only Chinook are observed
+
+**TODO check that these were not filtered from dataset**
+
+```{r, echo = F}
+unique(combined_snorkel$species)
+```
+
+### fork length
+
+**fork length for chinook**
+
+Most Chinook observations are for fry (~40mm) though there is some variation
+
+```{r, echo = F}
+combined_snorkel |> 
+  filter(species == "chinook") |> 
+  ggplot(aes(x = fork_length)) +
+  geom_density()
+```
+
+### depth
+
+**depth**
+
+```{r, echo = F}
+combined_snorkel |> 
+  ggplot(aes(x = water_depth_m)) +
+  geom_density()
+```
+
+### bank distance
+
+```{r, echo = F}
+combined_snorkel |> 
+  ggplot(aes(x = bank_distance)) +
+  geom_density()
+```
+
+### count
+
+```{r, echo = F}
+combined_snorkel |> 
+  ggplot(aes(x = count)) +
+  geom_density()
+```
+
+### cover
+
+**Instream cover codes**
+
+- A: No apparent cover (1)
+- B: Small instream objects/small-medium woody debris (2)
+- C: Large instream objects/large woody debris (3)
+- D: Overhead objects (4)
+- E: Submerged vegetation (5)
+- F: Undercut bank (6)
+
+**Overhead cover codes**
+
+- 0: No apparent overhead cover
+- 1: Overhanging vegetation with 0.5m above water surface
+- 2: Overhanging vegetation 0.5-2m above water surface
+- 3: Surface turbulence, bubble curtain
+
+```{r, echo = F}
+unique(combined_snorkel$instream_cover)
+filter(combined_snorkel, is.na(instream_cover)) |> tally()
+# If 2 included then 2
+# If 3 included and not 2 then 3
+# If 4 included and not 2 or 3 then 4
+# If 5 included and not 2, 3, 4 then 5
+# If 6 included and not 2-5 then 6
+# If only 1 included then 1
+
+combined_snorkel_clean <- combined_snorkel |> 
+  mutate(instream_cover = toupper(instream_cover),
+    instream_cover_mapping = case_when(grepl("B", instream_cover) ~ 2,
+                                            grepl("C", instream_cover) & !grepl("B", instream_cover) ~ 3,
+                                            grepl("D", instream_cover) & !grepl("B", instream_cover) & !grepl("C", instream_cover) ~ 4,
+                                            grepl("E", instream_cover) & !grepl("B", instream_cover) & !grepl("C", instream_cover) & !grepl("D", instream_cover) ~ 5,
+                                            grepl("F", instream_cover) & !grepl("B", instream_cover) & !grepl("C", instream_cover) & !grepl("D", instream_cover) & !grepl("E", instream_cover) ~ 6,
+                                            instream_cover == "A" ~ 1))
+unique(combined_snorkel_clean$instream_cover_mapping)
+filter(combined_snorkel_clean, is.na(instream_cover_mapping)) |> tally()
+# pivots cover type variable
+mini_snorkel_cover_long_format <- mini_snorkel_raw |> 
+  pivot_longer(cols = c(percent_no_cover_inchannel, percent_small_woody_cover_inchannel,
+                        percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel,
+                        percent_undercut_bank, percent_no_cover_overhead, percent_cover_half_meter_overhead, percent_cover_more_than_half_meter_overhead), names_to = "cover_type", values_to = "percent") 
+
+# distribution of percent cover by type where fish are observed
+mini_snorkel_cover_long_format |> 
+  filter(percent > 0, !cover_type %in% c("percent_no_cover_inchannel", "percent_no_cover_overhead", species == "Chinook salmon")) |> 
+  ggplot(aes(x = cover_type, y = percent)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45))
+```
+
+
