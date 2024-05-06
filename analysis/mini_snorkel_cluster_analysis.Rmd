@@ -1,9 +1,10 @@
 ---
-title: "Feather River - habitat data exploration"
+title: "Feather River habitat cluster analysis"
 author: "Ashley Vizek (FlowWest)"
 date: "`r Sys.Date()`"
 output: 
-  html_document
+  html_document:
+    theme: flatly
 ---
 
 # Overview
@@ -12,11 +13,14 @@ The goal of this document is guide the development of habitat suitability analys
 
 Feather River will be used as a case study location with the goal of creating a more streamlined workflow that could be applied elsewhere. There are two relevant datasets (1) mini snorkel data, and (2) the intermediate level ongoing snorkel survey. These data are utilizing different methodologies and part of these analyses will explore the differences between these two data collection methods and resulting habitat.
 
+**This markdown focuses on cluster analysis.**
+
 ```{r, include = F, message = F, warning = F}
 library(tidyverse)
 library(googleCloudStorageR)
 knitr::opts_chunk$set(warning = F, message = F)
 
+# TODO update data connections when data are posted on EDI
 combined_snorkel <- read_csv(here::here("data-raw", "combined_feather_snorkel_data.csv"))
 
 # mini snorkel data
@@ -60,7 +64,7 @@ mini_snorkel_raw |> group_by(location_table_id) |> summarize(n_quadrats = length
 - Species: Analyses should be performed for chinook and steelhead separately or maybe if we determine there is not a strong species affect can lump together. 
 - Fork length: If there is a wide variation in fork length a ruleset should be used to differentiate between lifestages and analyses should be performed separately for each lifestage. 
 - Reach/location: Some of the past analyses have removed reaches where no fish are observed; need to consider if that is something we want to do.
-- Absence/presence: May want to consider randomly selecting from the "unoccupied" observations to simulate paired random selection (?)
+- Absence/presence: May want to consider randomly selecting from the "unoccupied" observations to simulate paired random selection (?) Removing HFC locations may help in this.
 - Cover: These fields can be treated in many different ways. (1) Each can function as percent cover (though the "no cover" should be removed because they are different). (2) They can be transformed to a binary variable (cover/no cover), (3) two binary variables (instream, overhead), (4) They can also be treated as multiple binary variables where percent greater than 20% is counted as presence
 
 ## Distributions of key variables {.tabset}
@@ -446,9 +450,8 @@ The goal of the cluster analysis is to identify groupings of fish observations a
 
 **TODO**
 
-- consider the results with count - maybe this makes sense because the count is so skewed.
 - try with a density variable
-- try removing the high count variables
+- try cluster analysis or PCA to come up with substrate/cover groups
 
 **Key variables**
 
@@ -957,165 +960,6 @@ mini_snorkel_raw |>
 ggsave("analysis/figures/cover_no_fish_obs_boxplot.png", height = 7, width = 9)
 ```
 
-## Occupancy modeling
-
-*In progress*
-
-The goal here is to model presence/absence in a hierarchical Bayesian framework where there are repeat observations for a given site.
-
-We need to consider if the mini-snorkel data is set up appropriately to use with this modeling framework.
-
-Refer to: 
-Pascale's paper: https://onlinelibrary.wiley.com/doi/pdfdirect/10.1111/jfb.14143
-Mahardja 2021: https://escholarship.org/uc/item/9sp7r7q4 
-Another example: https://pubs.usgs.gov/of/2020/1100/ofr20201100.pdf
-
-```{r, include = F}
-library(unmarked)
-# sets up mini snorkel data for occupancy model
-# habitat variables of interest based on literature
-# depth, velocity, substrate, cover
-
-# site level habitat variables
-# we would need to take an average for the entire site based on micro level information
-# TODO are there better site level variables to use?
-# channel geomorphic is collected at microhab level it appears
-# use average depth and velocity for now
- 
-average_site_level_covariates <- mini_snorkel_raw |> 
-  select(-c(fish_data_id, species, date, channel_geomorphic_unit, fl_mm, count, dist_to_bottom, focal_velocity)) |> 
-  distinct() |> # make sure we just have one row for each quadrat (if multiple types of fish/fl observed would be repeat rows)
-  pivot_longer(cols = c(depth:surface_turbidity), names_to = "parameter", values_to = "value") |> 
-  group_by(location_table_id, parameter) |> 
-  summarize(value = mean(value, na.rm = T)) |>  # decided to do mean because there are a lot of zeros
-  pivot_wider(id_cols = location_table_id, values_from = "value", names_from = "parameter")
-
-# quadrat level fish observations variables
-quadrat_fish_obs <- mini_snorkel_raw |> 
-  filter(species == "Chinook salmon" | grepl("Steelhead", species) | is.na(species)) |> 
-  select(location_table_id, micro_hab_data_tbl_id, count) |> 
-  group_by(location_table_id, micro_hab_data_tbl_id) |> 
-  summarize(count = sum(count, na.rm = T)) |> 
-  mutate(count = ifelse((is.na(count) | count == 0), 0, 1)) |> 
-  group_by(location_table_id) |> 
-  mutate(label = row_number()) 
-
-quadrat_fish_obs_wide <- quadrat_fish_obs |> 
-  pivot_wider(id_cols = location_table_id, names_from = "label", values_from = "count")
-
-# preparing covariates for observations. focal velocity and depth will vary by species obs. we can take the average or we can use the depth and velocity associated with the quadrat
-quadrat_hab_vars <- quadrat_fish_obs |> 
-              select(-count) |> 
-  left_join(mini_snorkel_raw |> 
-  select(-c(fish_data_id, count, fl_mm, species, dist_to_bottom, focal_velocity, channel_geomorphic_unit, date))) |> 
-  group_by(location_table_id, label) |> 
-  distinct() |> 
-  mutate(percent_large_substrate = sum(percent_large_gravel_substrate, percent_cobble_substrate, percent_boulder_substrate),
-         percent_instream_cover = 100 - percent_no_cover_inchannel,
-         percent_overhead_cover = 100 - percent_no_cover_overhead) |> 
-  select(location_table_id, label, depth, velocity, percent_large_substrate,
-         percent_instream_cover, percent_overhead_cover)
-
-# depth
-depth <- quadrat_hab_vars  |> 
-  select(location_table_id, label, depth) |> 
-  ungroup() |> 
-  mutate(label = paste0("depth.", label),
-         mean= mean(depth),
-         sd = sd(depth),
-         depth = ((depth - mean)/sd)) |> 
-  pivot_wider(id_cols = location_table_id, names_from = "label", values_from = "depth")
-
-# velocity
-velocity <- quadrat_hab_vars  |> 
-  select(location_table_id, label, velocity) |> 
-  ungroup() |> 
-  mutate(label = paste0("velocity.", label),
-         mean = mean(velocity, na.rm = T),
-         sd = sd(velocity, na.rm = T),
-         velocity = ((velocity - mean)/sd)) |> 
-  pivot_wider(id_cols = location_table_id, names_from = "label", values_from = "velocity")
-
-# large sub
-large_sub <- quadrat_hab_vars  |> 
-  select(location_table_id, label, percent_large_substrate) |> 
-  ungroup() |> 
-  mutate(label = paste0("substrate.", label),
-         mean = mean(percent_large_substrate),
-         sd = sd(percent_large_substrate),
-         percent_large_substrate = ((percent_large_substrate - mean)/sd)) |> 
-  pivot_wider(id_cols = location_table_id, names_from = "label", values_from = "percent_large_substrate")
-
-# instream
-instream <- quadrat_hab_vars  |> 
-  select(location_table_id, label, percent_instream_cover) |> 
-  ungroup() |> 
-  mutate(label = paste0("instreamcover.", label),
-         mean = mean(percent_instream_cover),
-         sd = sd(percent_instream_cover),
-         percent_instream_cover = ((percent_instream_cover - mean)/sd)) |> 
-  pivot_wider(id_cols = location_table_id, names_from = "label", values_from = "percent_instream_cover")
-
-# overhead
-overhead <- quadrat_hab_vars  |> 
-  select(location_table_id, label, percent_overhead_cover) |> 
-  ungroup() |> 
-  mutate(label = paste0("overheadcover.", label),
-         mean = mean(percent_overhead_cover),
-         sd = sd(percent_overhead_cover),
-         percent_overhead_cover = ((percent_overhead_cover - mean)/sd)) |> 
-  pivot_wider(id_cols = location_table_id, names_from = "label", values_from = "percent_overhead_cover")
-
-y <- quadrat_fish_obs_wide[,2:37]
-siteCovs <- average_site_level_covariates[, c("depth", "velocity")]
-obsCovs <- list(depth = depth[,2:37],
-                velocity = velocity[,2:37],
-                large_sub = large_sub[,2:37],
-                instream_cover = instream[,2:37],
-                overhead_cover = overhead[,2:37])
-
-dat <- unmarkedFrameOccu(y = y, siteCovs = siteCovs, obsCovs = obsCovs)
-summary(dat)
-plot(dat)
-# example datasets within unmarked package
-# https://cran.r-project.org/web/packages/unmarked/vignettes/unmarked.html
-
-# wt <- read.csv(system.file("csv","widewt.csv", package="unmarked"))
-# y <- wt[,2:4]
-# siteCovs <-  wt[,c("elev", "forest", "length")]
-# obsCovs <- list(date=wt[,c("date.1", "date.2", "date.3")],
-#     ivel=wt[,c("ivel.1",  "ivel.2", "ivel.3")])
-# wt <- unmarkedFrameOccu(y = y, siteCovs = siteCovs, obsCovs = obsCovs)
-# summary(wt)
-# wt <- read_csv(system.file("csv", "frog2001pcru.csv", package = "unmarked"))
-# pcru <- csvToUMF(system.file("csv","frog2001pcru.csv", package="unmarked"),
-#                  long = TRUE, type = "unmarkedFrameOccu")
-```
-
-```{r, eval = F, include = F}
-# TODO need to better understand detection v occupancy
-# Considerations - should this be an open model because fish could be migrating downstream
-
-# ~ detection ~ occupancy
-
-# Null model
-fm1 <- occu(~1 ~1, dat)
-fm1
-
-fm2 <- occu(~depth+velocity ~1, dat)
-fm2
-
-# The expected probability that a site was occupied is 0.405. This estimate applies to the hypothetical population of all possible sites, not the sites found in our sample. For a good discussion of population-level vs finite-sample inference, see Royle and Dorazio (2008) page 117. Note also that finite-sample quantities can be computed in unmarked using empirical Bayes methods as demonstrated at the end of this document.
-backTransform(fm2, "state")
-
-# Thus, we can say that the expected probability of detection was 0.118 when depth, velocity, and instream cover are fixed at their mean value. 
-backTransform(linearComb(fm2, coefficients = c(1,0,0,0,0), type = 'det'))
-
-newData <- data.frame(depth = 0, velocity = -2:2, instream_cover = 0)
-newData <- data.frame(depth = -2:2, velocity = 0, instream_cover = 0)
-newData <- data.frame(depth = 0, velocity = 0, instream_cover = -2:2)
-round(predict(fm2, type = 'det', newdata = newData, appendData=TRUE), 2)
-```
 
 # Intermediate Snorkel
 
@@ -1141,7 +985,7 @@ obs_ck <- ongoing_snorkel_obs |>
 - We should double check the data Erin pulled from the database - was this filered to Chinook? We want all species
 - section_name, units_covered, unit, location, section_type, unit_type, section_number are all related to location. We need to do a better job getting these organized.
 
-## Distributions of key variables
+## Distributions of key variables {.tabset}
 
 ### species
 
