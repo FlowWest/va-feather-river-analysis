@@ -1,0 +1,393 @@
+---
+title: "Mini Snorkel Feather HSC Using Logistic Regression"
+author: "Maddee Rubenson"
+date: "`r Sys.Date()`"
+output: github_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tidymodels)
+
+knitr::opts_chunk$set(echo = TRUE)
+
+theme_set(
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),  
+    axis.title.x = element_text(size = 14),  
+    axis.title.y = element_text(size = 14)   
+  )
+)
+options(scipen=999)
+
+
+```
+
+## Objective
+
+Using the mini snorkel data for the Feather River, produce an HSC that uses cover, substrate, depth and velocity. 
+
+```{r}
+# read in mini snorkel data
+mini_snorkel_model_ready <- read_csv(here::here('data-raw', 'microhabitat_with_fish_observations.csv')) |> 
+  mutate(count = ifelse(is.na(count), 0, count),
+        fish_presence = as.factor(ifelse(count < 1, "0", "1"))) |> 
+  glimpse()
+
+```
+
+## Pre-process data
+
+#### Normalize Substrate by Prevalence
+
+This table provides a weighting for each substrate type based on the
+overall presence (\>20%) of each substrate type. Use this to normalize
+the substrate columns.
+
+```{r}
+substrate_percent <- mini_snorkel_model_ready |> 
+  group_by(micro_hab_data_tbl_id) |> 
+  select(contains('substrate')) |> 
+  distinct() |> 
+  pivot_longer(cols = c(percent_fine_substrate:percent_boulder_substrate), names_to = "substrate_type", values_to = "percent") |> 
+  mutate(substrate_presence_absence = ifelse(percent < 19, 0, 1)) |>  # 20% threshold
+  group_by(substrate_type) |> 
+  summarise(total_presence = sum(substrate_presence_absence)) |> 
+  ungroup() |> 
+  mutate(perc_total = total_presence/sum(total_presence))
+
+knitr::kable(substrate_percent |> mutate(perc_total = perc_total*100), digits = 2)
+
+```
+
+Apply substrate normalization values to substrate columns and remove
+unnecessary columns
+
+```{r}
+mini_snorkel_grouped <- mini_snorkel_model_ready |> 
+  # filter(species %in% c('Chinook Salmon', 'Steelhead trout (wild)', 'Steelhead trout, (clipped)') | is.na(species)) |> 
+  rowwise() |> 
+  mutate(fine_substrate = percent_fine_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_fine_substrate", 'perc_total']$perc_total),
+         sand_substrate = percent_sand_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_sand_substrate", 'perc_total']$perc_total),
+         small_gravel = percent_small_gravel_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_small_gravel_substrate", 'perc_total']$perc_total),
+         large_gravel = percent_large_gravel_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_large_gravel_substrate", 'perc_total']$perc_total),
+         cobble_substrate = percent_cobble_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_cobble_substrate", 'perc_total']$perc_total),
+         boulder_substrate = percent_boulder_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_boulder_substrate", 'perc_total']$perc_total)) |> 
+  select(-c(percent_fine_substrate:percent_boulder_substrate)) |> 
+  mutate(woody_debris = sum(percent_large_woody_cover_inchannel, percent_small_woody_cover_inchannel),
+         overhead_cover = sum(percent_cover_half_meter_overhead, percent_cover_more_than_half_meter_overhead)
+         ) |> 
+  select(-c(percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_cover_more_than_half_meter_overhead, percent_cover_half_meter_overhead)) |> 
+  #filter(species == "Chinook salmon" | is.na(species)) |> 
+  select(-count, -channel_geomorphic_unit, -micro_hab_data_tbl_id, -location_table_id, -fish_data_id,
+         -focal_velocity, -dist_to_bottom, -fl_mm, -species,  -transect_code, -date, -surface_turbidity) |> 
+  select(-(contains("no_cover"))) |> 
+  distinct() |> 
+  na.omit() |> glimpse()
+```
+
+## Logistic Regression: 1 - Using Cover, Substrate, Velocity, and Depth
+
+**Predictors**
+
+-   Depth
+
+-   Velocity
+
+-   Substrate (fine through boulder) normalized by prevalence
+
+-   Woody Debris (`percent_small_woody_cover_inchannel` +
+    `percent_large_woody_cover_inchannel`)
+
+-   Overhead Cover (`percent_cover_more_than_half_meter_overhead` +
+    `percent_cover_half_meter_overhead`)
+
+-   Submerged Aquatic Vegetation
+
+-   Undercut Bank
+
+**Notes**
+
+-   Chose to remove surface turbidity from predictors because it is not
+    a parameter aligned with the strategic plan. This parameter,
+    however, was initially found significant in the logistic regression
+
+**Preliminary Results**
+
+-   Significant Predictors include: undercut bank (+), small gravel (-),
+    boulder substrate (+), woody debris (+), and overhead cover (+)
+
+#### Build Model
+
+```{r message=FALSE, warning=FALSE}
+recipe <- recipe(data = mini_snorkel_grouped, formula = fish_presence ~.) |> 
+  # step_poly(all_predictors(), degree = 2) |> x^2
+  step_mutate_at(all_numeric_predictors(), fn = asinh) |> # inverse hyperbolic sine as alternative to log that can handle zeros
+  step_naomit(all_predictors()) |> # ensure there are no NAs
+  step_zv(all_predictors()) |> # ensure there are no columns that are all the same value
+  step_normalize(all_numeric_predictors()) # Normalization can facilitate the comparison of the relative importance of different predictors
+
+log_reg <- logistic_reg() |> 
+  set_engine("glm") 
+
+log_reg_model <- workflow() |>
+  add_recipe(recipe) |>
+  add_model(log_reg) |> 
+  fit(data = mini_snorkel_grouped)
+
+log_reg_model |> glance()
+log_reg_model |> tidy() |> filter(p.value < 0.1)
+
+sig_predictors <- log_reg_model |> tidy() |> filter(p.value < 0.1) |> filter(term != "(Intercept)") |>  pull(term)
+
+predictions <- predict(log_reg_model, mini_snorkel_grouped, type = "prob") |> 
+  bind_cols(mini_snorkel_grouped) 
+
+```
+
+```{r eval=FALSE, include=FALSE}
+#exploratory to see if we want to change the threshold?
+hard_pred_0.5 <- predictions |>
+  mutate(.pred = probably::make_two_class_pred(
+      estimate = .pred_1,
+      levels = levels(fish_presence),
+      threshold = .5))  |>
+  select(fish_presence, contains(".pred"))
+
+hard_pred_0.5 %>%
+  count(.truth = fish_presence, .pred)
+```
+
+### Results
+
+The following predictors were found to significantly effect fish
+presence: `r paste0(sig_predictors, collapse = ", ")`
+
+```{r message=FALSE, warning=FALSE}
+map(sig_predictors, function(predictor) {
+  ggplot(predictions, aes_string(x = predictor, y = ".pred_1")) +
+    geom_smooth(method = "glm") +
+    labs(title = paste("Predicted Probability vs.", predictor),
+         y = 'Probability of Fish Presence')
+})
+
+
+```
+
+<!-- ### Plots of the geometric mean and 90% Confidence Intervals -->
+
+```{r eval=FALSE, include=FALSE}
+# scratch plots
+gmean <- function(x) exp(mean(log(x)))
+
+predictions <- predict(log_reg_model, mini_snorkel_grouped, type = "prob") |> 
+  bind_cols(mini_snorkel_grouped) |> 
+  bind_cols(predict(log_reg_model, mini_snorkel_grouped,type = "conf_int",level = 0.90)) |> 
+  select(-fish_presence) |> 
+  pivot_longer(cols = c(depth:overhead_cover), names_to = "predictor", values_to = "value") |> 
+  group_by(predictor, value) |> 
+  summarise(.pred_1 = .pred_1,
+            geom_mean_prob = gmean(.pred_1),
+            geom_mean_conf_lower_1 = gmean(.pred_lower_1),
+            geom_mean_conf_upper_1 = gmean(.pred_upper_1)) |> 
+  ungroup()
+  
+predictions |> 
+  filter(predictor == "percent_undercut_bank") |> 
+  ggplot(aes(x = value, y = geom_mean_prob)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = geom_mean_conf_lower_1, ymax = geom_mean_conf_upper_1), alpha = 0.3)
+
+predictions |> 
+  filter(predictor == "small_gravel") |> 
+  ggplot(aes(x = value, y = geom_mean_prob)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = geom_mean_conf_lower_1, ymax = geom_mean_conf_upper_1), , alpha = 0.3)
+
+
+predictions |> 
+  filter(predictor == "boulder_substrate") |> 
+  ggplot(aes(x = value, y = geom_mean_prob)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = geom_mean_conf_lower_1, ymax = geom_mean_conf_upper_1), , alpha = 0.3)
+
+predictions |> 
+  filter(predictor == "woody_debris") |> 
+  ggplot(aes(x = value, y = geom_mean_prob)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = geom_mean_conf_lower_1, ymax = geom_mean_conf_upper_1), , alpha = 0.3)
+
+predictions |> 
+  filter(predictor == "overhead_cover") |> 
+  ggplot(aes(x = value, y = geom_mean_prob)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = geom_mean_conf_lower_1, ymax = geom_mean_conf_upper_1), , alpha = 0.3)
+
+```
+
+## Logistic Regression: 2 - Use cover as presence/absence variable
+
+[Beakes et al.
+2012](https://www.sfu.ca/biology/faculty/jwmoore/publications/Beakes_etal_RRA_inpress.pdf)
+We identified locations with cover when they were within 50 cm of large
+woody debris (\>7.5 cm diameter), tall vegetation (\>50 cm above
+ground), overhanging vegetation (\<50 cm from water’s surface), large
+boulders (\>17.5 cm diameter), undercut banks, large bedrock crevasses
+or combinations of these cover types. Areas without cover included
+characteristics such as small vegetation, small substrate (\<17.5 cm
+diameter) or filamentous algae.
+
+**Predictors**
+
+-   Cover Presence (1/0): summation of undercut bank, woody debris,
+    overhead cover, and submerged aquatic vegetation and greater than
+    20%
+
+-   Substrate (fine through boulder) normalized by prevalence
+
+-   Depth
+
+-   Velocity
+
+**Preliminary Results**
+
+-   Cover Presence is a significant predictor and the strongest when
+    describing probability of fish presence
+
+-   Boulder (+) and Small Gravel (-) are also significant predictors
+
+```{r}
+mini_snork_cover <- mini_snorkel_grouped |> 
+  mutate(cover_total = percent_undercut_bank + woody_debris + overhead_cover + percent_submerged_aquatic_veg_inchannel,
+         cover_presence = as.factor(ifelse(cover_total >= 20, 1, 0))) |> 
+  select(-c(percent_undercut_bank, woody_debris, overhead_cover, percent_submerged_aquatic_veg_inchannel, cover_total)) |> 
+  glimpse()
+```
+
+```{r}
+recipe <- recipe(data = mini_snork_cover, formula = fish_presence ~.) |> 
+  # step_poly(all_predictors(), degree = 2) |> x^2
+  step_mutate_at(all_numeric_predictors(), fn = asinh) |> # inverse hyperbolic sine as alternative to log that can handle zeros
+  step_naomit(all_predictors()) |> # ensure there are no NAs
+  step_zv(all_predictors()) |> # ensure there are no columns that are all the same value
+  step_normalize(all_numeric_predictors()) # Normalization can facilitate the comparison of the relative importance of different predictors
+
+log_reg <- logistic_reg() |> 
+  set_engine("glm") 
+
+log_reg_model <- workflow() |>
+  add_recipe(recipe) |>
+  add_model(log_reg) |> 
+  fit(data = mini_snork_cover)
+
+log_reg_model |> glance()
+log_reg_model |> tidy() |> filter(p.value < 0.1)
+
+sig_predictors <- log_reg_model |> tidy() |> filter(p.value < 0.1) |> filter(term != "(Intercept)") |>  pull(term)
+
+predictions <- predict(log_reg_model, mini_snork_cover, type = "prob") |> 
+  bind_cols(mini_snork_cover) 
+
+```
+
+#### Results
+
+The following predictors were found to significantly effect fish
+presence: `r paste0(sig_predictors, collapse = ", ")`
+
+```{r}
+ggplot(predictions, aes(x = cover_presence, y = .pred_1)) +
+    geom_boxplot() +
+    labs(title = "Predicted Probability vs. cover presence",
+         y = 'Probability of Fish Presence')
+
+
+map(sig_predictors[1:2], function(predictor) {
+  ggplot(predictions, aes_string(x = predictor, y = ".pred_1")) +
+    geom_smooth(method = "glm") +
+    labs(title = paste("Predicted Probability vs.", predictor),
+         y = 'Probability of Fish Presence')
+})
+
+
+```
+
+## Next steps
+
+1.  Compare to species presence/absence
+2.  Look into methods for creating a more even sample of fish
+    presence/absence that does not create a synthetic dataset
+3.  Continue exploring methods for normalization and tuning parameters
+    and adding interactions between parameters
+4.  Explore using a fixed effect - such as geomorphic unit (pool, glide,
+    riffle) or river mile
+
+```{r}
+knitr::knit_exit()
+```
+
+```{r}
+# explore interactions
+
+recipe <- recipe(data = mini_snorkel_grouped, formula = fish_presence ~.) |> 
+  step_mutate_at(all_numeric_predictors(), fn = asinh) |> # inverse hyperbolic sine as alternative to log that can handle zeros
+  step_naomit(all_predictors()) |> # ensure there are no NAs
+  step_zv(all_predictors()) |> # ensure there are no columns that are all the same value
+  step_normalize(all_numeric_predictors()) # Normalization can facilitate the comparison of the relative importance of different predictors
+
+log_reg <- logistic_reg() |> 
+  set_engine("glm") 
+
+log_reg_model <- workflow() |>
+  add_recipe(recipe) |>
+  add_model(log_reg) |> 
+  fit(data = mini_snorkel_grouped)
+
+interaction_grid <- mini_snorkel_grouped |> 
+  select(-fish_presence) |> 
+  names() |> 
+  combn(2, simplify = FALSE) |> 
+  map(~interaction(term = .x[[1]], .x[[2]])) |> 
+  unlist()
+
+folds <- vfold_cv(mini_snorkel_grouped, v = 5)
+model_with_interactions <- tune_grid(
+  log_reg_model,
+   resamples = folds,
+  grid = interaction_grid
+)
+
+show_best(model_with_interactions) 
+
+```
+
+```{r}
+# using a single predictor: 
+# RESULTS ARE ALIGNED 
+recipe <- recipe(data = mini_snorkel_grouped, formula = fish_presence ~ percent_undercut_bank) |> 
+  step_mutate_at(all_numeric_predictors(), fn = asinh) |> # inverse hyperbolic sine as alternative to log that can handle zeros
+  step_naomit(all_predictors()) |> # ensure there are no NAs
+  step_zv(all_predictors()) |> # ensure there are no columns that are all the same value
+  step_normalize(all_numeric_predictors()) # Normalization can facilitate the comparison of the relative importance of different predictors
+
+log_reg <- logistic_reg() |> 
+  set_engine("glm") 
+
+log_reg_model <- workflow() |>
+  add_recipe(recipe) |>
+  add_model(log_reg) |> 
+  fit(data = mini_snorkel_grouped)
+
+log_reg_model |> tidy()
+
+predictions <- predict(log_reg_model, mini_snorkel_grouped, type = "prob") |> 
+  bind_cols(mini_snorkel_grouped) 
+
+ggplot(predictions, aes(x = percent_undercut_bank, y = .pred_1)) +
+    geom_smooth(method = "glm") 
+
+```
