@@ -804,6 +804,8 @@ cluster_assign |>
 
 ### Results
 
+#### primary variables
+
 **Number of clusters**
 
 Based on analysis of multiple indices, 3-4 clusters is the best fit. Note that this could be looked into further to confirm this is the best number of clusters. I decided to go with 4 clusters based on the results of the scree plot.
@@ -821,7 +823,7 @@ The following includes a number of plots that could be used to visualize these r
 # Make a pretty dendrogram plot
 ```
 
-#### Depth and velocity
+##### Depth and velocity
 
 There are small differences in local depth and velocity. There is a trend that can be observed but these results may not be significant. 
 
@@ -872,7 +874,7 @@ mini_snorkel_raw |>
 
 ```
 
-#### Substrate
+##### Substrate
 
 There very clear differences in percent of small gravel, large gravel, and cobble between groups. There are smaller differences in percent boulder.
 
@@ -915,7 +917,7 @@ mini_snorkel_raw |>
        y = "")
 ```
 
-#### Cover
+##### Cover
 
 There are very clear differences in percent submerged aquatic vegetation and percent cover overhead. There are smaller differences in percent small woody cover. There are small differences in percent large woody cover and undercut banks.
 
@@ -960,6 +962,238 @@ mini_snorkel_raw |>
 ggsave("analysis/figures/cover_no_fish_obs_boxplot.png", height = 7, width = 9)
 ```
 
+#### substrate clustering
+
+Goal of this clustering exercise to see if there are types of substrate that are found together.
+
+- Try with just fish observations
+- Try with all data
+
+```{r, include = F}
+
+substrate_cluster_data <- mini_snorkel_raw |> 
+  filter(count > 0, fl_mm < 100) |> # filter to only include fish observations. i think makes the most sense because we are asking are there clusters of habitat characteristics that fish use. Also filtered to juvenile fish (about 11 fish that are adult size)
+  mutate(month = month(date),
+         species_cat = case_when(species == "Chinook salmon" ~ 1,
+                                 grepl("Steelhead", species) ~ 2,
+                                 T ~ 3)) |> 
+  select(percent_fine_substrate, 
+         percent_sand_substrate, 
+         percent_small_gravel_substrate,
+         percent_large_gravel_substrate,
+         percent_cobble_substrate,
+         percent_boulder_substrate)
+
+substrate_clusters <- hclust(dist(substrate_cluster_data), method = "ward.D2")
+# Dendrogram plot (need to make a prettier one)
+```
+
+```{r, include = F}
+# Evaluating clusters
+
+library(NbClust)
+# currently not working to run all the indices so need to identify the ones that work
+res <- NbClust(data = substrate_cluster_data, method = "ward.D2")
+# kl = 6
+# ch = 5
+# hartigan = 6
+# cindex = 14
+# db = 5
+# silhouette = 5
+# ratkowsky = 5
+# ball = 3
+# ptbiserial = 6
+# gap = 2
+# frey = 1
+# mcclain = 2
+# dunn = 2
+# NbClust(data = cluster_data, method = "ward.D2", index = "dunn")
+# Function for scree plot
+```
+
+```{r, include = F}
+# Assign clusters
+
+# Function to cut tree into the selected number of clusters
+cluster_groups <- cutree(substrate_clusters, k = 5)
+table(cluster_groups)
+
+# add cluster assignments to the data so we can summarize
+substrate_cluster_assign <- substrate_cluster_data |> 
+  cbind(cluster_groups) |> 
+  mutate(cluster_groups = factor(cluster_groups))
+
+substrate_cluster_data_post <- mini_snorkel_raw |> 
+  filter(count > 0, fl_mm < 100) |> 
+  cbind(cluster_groups) |> 
+  mutate(cluster_groups = factor(cluster_groups))
+```
+
+This analysis results in 5 clusters with pretty clear distinctions: majority large gravel, majority sand, majority small gravel, cobble/boulder/large gravel, majority fine. 
+
+I looked at summaries of cover for these same cluster groups and didn't find anything - most groups had similar breakdowns of cover. Substrate is more related to depth and velocity.
+
+We should probably leave out substrate or include a group that classifies as cobble/boulder/large gravel.
+
+```{r, echo = F}
+substrate_cluster_assign |> 
+  pivot_longer(cols = percent_fine_substrate:percent_boulder_substrate, names_to = "parameter", values_to = "value") |> 
+  ggplot(aes(x = cluster_groups, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~parameter, scales ="free_y") +
+  theme_bw() +
+  labs(x = "",
+       y = "")
+
+#ggsave("analysis/figures/substrate_boxplot.png", height = 7, width = 9)
+
+substrate_cluster_assign |> 
+  pivot_longer(cols = percent_fine_substrate:percent_boulder_substrate, names_to = "parameter", values_to = "value") |> 
+  ggplot(aes(x = cluster_groups, y = value, fill = parameter)) +
+  geom_col() +
+  theme_bw() +
+  labs(x = "",
+       y = "")
+
+substrate_cluster_assign |> 
+  pivot_longer(cols = percent_fine_substrate:percent_boulder_substrate, names_to = "parameter", values_to = "value") |> 
+  group_by(cluster_groups, parameter) |> 
+  summarize(mean = mean(value),
+            median = median(value)) |> 
+  ggplot(aes(x = cluster_groups, y = mean, fill = parameter)) +
+  geom_col() +
+  theme_bw() +
+  labs(x = "",
+       y = "")
+ggsave("analysis/figures/substrate_cluster_combo.png", height = 7, width = 9)
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = percent_small_gravel_substrate)) +
+#   geom_boxplot()
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = percent_large_gravel_substrate)) +
+#   geom_boxplot()
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = percent_cobble_substrate)) +
+#   geom_boxplot()
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = percent_boulder_substrate)) +
+#   geom_boxplot()
+
+substrate_cluster_data_post |> 
+  select(cluster_groups, percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel, percent_undercut_bank, percent_cover_half_meter_overhead, percent_cover_more_than_half_meter_overhead) |> 
+  pivot_longer(cols = c(percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel, percent_undercut_bank, percent_cover_half_meter_overhead, percent_cover_more_than_half_meter_overhead), names_to = "parameter", values_to = "value") |> 
+  group_by(cluster_groups, parameter) |> 
+  summarize(mean = mean(value, na.rm = T),
+            median = median(value, na.rm = T)) |> 
+  ggplot(aes(x = cluster_groups, y = mean, fill = parameter)) +
+  geom_col() +
+  theme_bw() +
+  labs(x = "",
+       y = "")
+```
+
+#### all data substrate cluster
+
+```{r, include = F}
+
+all_substrate_cluster_data <- mini_snorkel_raw |> 
+  #filter(count > 0, fl_mm < 100) |> # filter to only include fish observations. i think makes the most sense because we are asking are there clusters of habitat characteristics that fish use. Also filtered to juvenile fish (about 11 fish that are adult size)
+  select(percent_fine_substrate, 
+         percent_sand_substrate, 
+         percent_small_gravel_substrate,
+         percent_large_gravel_substrate,
+         percent_cobble_substrate,
+         percent_boulder_substrate)
+
+substrate_clusters <- hclust(dist(all_substrate_cluster_data), method = "ward.D2")
+# Dendrogram plot (need to make a prettier one)
+```
+
+**Dendrogram of clusters**
+
+The dendrogram visualizes the connections between datapoints. Need to clean this plot up.
+
+```{r, echo = F}
+plot(substrate_clusters)
+```
+
+**Scree plot**
+
+The elbow of the scree plot visualizes the ideal number of clusters.
+
+```{r, echo = F}
+scree <- function(hclust.obj, max.size = 12) {
+temp <- with(hclust.obj, cbind(height, merge))
+colnames(temp) <- c("Height", "JoinsThis", "WithThis")
+plot(x = max.size:1,
+     y = temp[(nrow(temp)-( max.size -1)):nrow(temp), 1],
+     xlab = "Number of groups", ylab = "Height",
+     main = hclust.obj $call, type = "b")
+tail(temp, max.size)
+}
+scree(hclust.obj = substrate_clusters)
+```
+
+
+```{r, include = F}
+# Assign clusters
+
+# Function to cut tree into the selected number of clusters
+cluster_groups <- cutree(substrate_clusters, k = 6)
+table(cluster_groups)
+
+# add cluster assignments to the data so we can summarize
+substrate_cluster_assign <- all_substrate_cluster_data |> 
+  cbind(cluster_groups) |> 
+  mutate(cluster_groups = factor(cluster_groups))
+```
+
+There very clear differences in percent of small gravel, large gravel, and cobble between groups. There are smaller differences in percent boulder.
+
+```{r, echo = F}
+substrate_cluster_assign |> 
+  pivot_longer(cols = percent_fine_substrate:percent_boulder_substrate, names_to = "parameter", values_to = "value") |> 
+  ggplot(aes(x = cluster_groups, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~parameter, scales ="free_y") +
+  theme_bw() +
+  labs(x = "",
+       y = "")
+
+#ggsave("analysis/figures/substrate_boxplot.png", height = 7, width = 9)
+
+substrate_cluster_assign |> 
+  pivot_longer(cols = percent_fine_substrate:percent_boulder_substrate, names_to = "parameter", values_to = "value") |> 
+  ggplot(aes(x = cluster_groups, y = value, fill = parameter)) +
+  geom_col() +
+  theme_bw() +
+  labs(x = "",
+       y = "")
+
+substrate_cluster_assign |> 
+  pivot_longer(cols = percent_fine_substrate:percent_boulder_substrate, names_to = "parameter", values_to = "value") |> 
+  group_by(cluster_groups, parameter) |> 
+  summarize(mean = mean(value),
+            median = median(value)) |> 
+  ggplot(aes(x = cluster_groups, y = mean, fill = parameter)) +
+  geom_col() +
+  theme_bw() +
+  labs(x = "",
+       y = "")
+
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = percent_small_gravel_substrate)) +
+#   geom_boxplot()
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = percent_large_gravel_substrate)) +
+#   geom_boxplot()
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = percent_cobble_substrate)) +
+#   geom_boxplot()
+# cluster_assign |> 
+#   ggplot(aes(x = cluster_groups, y = percent_boulder_substrate)) +
+#   geom_boxplot()
+```
 
 # Intermediate Snorkel
 
