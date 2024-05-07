@@ -7,7 +7,7 @@ Two datasets are in the process of being published as part of this project. Afte
 
 ## analysis
 
-This analysis is actively in progress and occuring on branches.
+This analysis is actively in progress and occurring on branches.
 
 
 - [mini-snorkel branch](https://github.com/FlowWest/va-feather-river-analysis/tree/mini-snorkel) contains logistic regression analysis using the mini-snorkel dataset
