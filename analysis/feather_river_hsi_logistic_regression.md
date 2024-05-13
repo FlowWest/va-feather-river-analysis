@@ -1,7 +1,7 @@
 Mini Snorkel Feather HSC Using Logistic Regression
 ================
 Maddee Rubenson
-2024-05-06
+2024-05-13
 
 ## Objective
 
@@ -221,40 +221,18 @@ The following predictors were found to significantly effect fish
 presence: percent_undercut_bank, small_gravel, boulder_substrate,
 woody_debris, overhead_cover
 
-``` r
-map(sig_predictors, function(predictor) {
-  ggplot(predictions, aes_string(x = predictor, y = ".pred_1")) +
-    geom_smooth(method = "glm") +
-    labs(title = paste("Predicted Probability vs.", predictor),
-         y = 'Probability of Fish Presence')
-})
-```
+    ## Warning: Returning more (or less) than 1 row per `summarise()` group was deprecated in
+    ## dplyr 1.1.0.
+    ## ℹ Please use `reframe()` instead.
+    ## ℹ When switching from `summarise()` to `reframe()`, remember that `reframe()`
+    ##   always returns an ungrouped data frame and adjust accordingly.
+    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+    ## generated.
 
-    ## [[1]]
+    ## `summarise()` has grouped output by 'predictor', 'value'. You can override
+    ## using the `.groups` argument.
 
-![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
-
-    ## 
-    ## [[2]]
-
-![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-6-2.png)<!-- -->
-
-    ## 
-    ## [[3]]
-
-![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-6-3.png)<!-- -->
-
-    ## 
-    ## [[4]]
-
-![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-6-4.png)<!-- -->
-
-    ## 
-    ## [[5]]
-
-![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-6-5.png)<!-- -->
-
-<!-- ### Plots of the geometric mean and 90% Confidence Intervals -->
+![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-7-2.png)<!-- -->![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-7-3.png)<!-- -->![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-7-4.png)<!-- -->![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-7-5.png)<!-- -->
 
 ## Logistic Regression: 2 - Use cover as presence/absence variable
 
@@ -374,6 +352,13 @@ map(sig_predictors[1:2], function(predictor) {
 })
 ```
 
+    ## Warning: `aes_string()` was deprecated in ggplot2 3.0.0.
+    ## ℹ Please use tidy evaluation idioms with `aes()`.
+    ## ℹ See also `vignette("ggplot2-in-packages")` for more information.
+    ## This warning is displayed once every 8 hours.
+    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+    ## generated.
+
     ## [[1]]
 
     ## `geom_smooth()` using formula = 'y ~ x'
@@ -387,15 +372,215 @@ map(sig_predictors[1:2], function(predictor) {
 
 ![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-10-3.png)<!-- -->
 
-## Next steps
+## Logistic Regression: 3 - using dominant cover and substrate
 
-1.  Compare to species presence/absence
-2.  Look into methods for creating a more even sample of fish
-    presence/absence that does not create a synthetic dataset
-3.  Continue exploring methods for normalization and tuning parameters
-    and adding interactions between parameters
-4.  Explore using a fixed effect - such as geomorphic unit (pool, glide,
-    riffle) or river mile
+Instead of using percent - treat cover and substrate as
+presence/absence. If there percent is \>= 80%, it is treated as present.
+
+**Predictors**
+
+- fine substrate (1/0)
+
+- sand substrate (1/0)
+
+- small gravel (1/0)
+
+- large gravel (1/0)
+
+- submerged aquatic veg (1/0)
+
+- undercut bank (1/0)
+
+- no cover overhead (1/0)
+
+- half meter overhead (1/0)
+
+- cover more than half meter overhead (1/0)
+
+- velocity
+
+- depth
+
+**Preliminary Results**
+
+- Significant Predictors include: fine substrate (+), sand substrate
+  (+), small gravel (-), small woody in channel cover (+), submerged
+  aquatic veg (-), no overhead cover (-)
+
+**Notes**
+
+- The highest percent undercut bank in mini snorkel data is 50% and
+  therefore this method doesn’t find that as a significant predictor
+  because all data is considered to not have an undercut bank. Could
+  consider adjusting threshold. Could be worth considering using 20% as
+  threshold since that is what is used for the Strategic Plan.
+
+``` r
+percent_threshold <- 80
+
+log_3_data <- mini_snorkel_model_ready |> 
+  select(fish_presence, depth, velocity, percent_fine_substrate:percent_cover_more_than_half_meter_overhead) |> 
+  mutate(fine_substrate = ifelse(percent_fine_substrate >= percent_threshold, 1, 0),
+         sand_substrate = ifelse(percent_sand_substrate >= percent_threshold, 1, 0),
+         small_gravel_substrate = ifelse(percent_small_gravel_substrate >= percent_threshold, 1, 0),
+         large_gravel_substrate = ifelse(percent_large_gravel_substrate >= percent_threshold, 1, 0),
+         small_woody_cover_inchannel = ifelse(percent_small_woody_cover_inchannel >= percent_threshold, 1, 0 ),
+         large_woody_cover_inchannel = ifelse(percent_large_woody_cover_inchannel >= percent_threshold, 1, 0 ),
+         submerged_aquatic_veg_inchannel = ifelse(percent_submerged_aquatic_veg_inchannel >= 80, 1, 0),
+         undercut_bank = ifelse(percent_undercut_bank >= percent_threshold, 1, 0),
+         no_cover_ovhead = ifelse(percent_no_cover_overhead >= percent_threshold, 1, 0),
+         half_meter_overhead = ifelse(percent_cover_half_meter_overhead >= percent_threshold, 1, 0),
+         cover_more_than_half_meter_overhead = ifelse(percent_cover_more_than_half_meter_overhead >= percent_threshold, 1, 0)) |> 
+  select(fish_presence, depth, velocity, fine_substrate:cover_more_than_half_meter_overhead) |> 
+  glimpse()
+```
+
+    ## Rows: 5,018
+    ## Columns: 14
+    ## $ fish_presence                       <fct> 1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 1, 1…
+    ## $ depth                               <dbl> 17, 17, 17, 19, 11, 12, 11, 10, 8,…
+    ## $ velocity                            <dbl> 0.22, 0.22, 0.22, 0.35, 1.95, 2.14…
+    ## $ fine_substrate                      <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+    ## $ sand_substrate                      <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+    ## $ small_gravel_substrate              <dbl> 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0…
+    ## $ large_gravel_substrate              <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+    ## $ small_woody_cover_inchannel         <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+    ## $ large_woody_cover_inchannel         <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+    ## $ submerged_aquatic_veg_inchannel     <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+    ## $ undercut_bank                       <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+    ## $ no_cover_ovhead                     <dbl> 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1…
+    ## $ half_meter_overhead                 <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+    ## $ cover_more_than_half_meter_overhead <dbl> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0…
+
+### Build Model
+
+``` r
+recipe <- recipe(data = log_3_data, formula = fish_presence ~.) |> 
+  # step_poly(all_predictors(), degree = 2) |> x^2
+  step_mutate_at(all_numeric_predictors(), fn = asinh) |> # inverse hyperbolic sine as alternative to log that can handle zeros
+  step_naomit(all_predictors()) |> # ensure there are no NAs
+  step_zv(all_predictors()) |> # ensure there are no columns that are all the same value
+  step_normalize(all_numeric_predictors()) # Normalization can facilitate the comparison of the relative importance of different predictors
+
+log_reg <- logistic_reg() |> 
+  set_engine("glm") 
+
+log_reg_model <- workflow() |>
+  add_recipe(recipe) |>
+  add_model(log_reg) |> 
+  fit(data = log_3_data)
+```
+
+    ## Warning: glm.fit: fitted probabilities numerically 0 or 1 occurred
+
+``` r
+log_reg_model |> glance()
+```
+
+    ## # A tibble: 1 × 8
+    ##   null.deviance df.null logLik   AIC   BIC deviance df.residual  nobs
+    ##           <dbl>   <int>  <dbl> <dbl> <dbl>    <dbl>       <int> <int>
+    ## 1         2614.    4935 -1213. 2452. 2537.    2426.        4923  4936
+
+``` r
+log_reg_model |> tidy() |> filter(p.value < 0.1)
+```
+
+    ## # A tibble: 6 × 5
+    ##   term                            estimate std.error statistic  p.value
+    ##   <chr>                              <dbl>     <dbl>     <dbl>    <dbl>
+    ## 1 fine_substrate                    0.146     0.0384      3.81 1.37e- 4
+    ## 2 sand_substrate                    0.104     0.0476      2.18 2.96e- 2
+    ## 3 small_gravel_substrate           -0.155     0.0664     -2.33 2.00e- 2
+    ## 4 small_woody_cover_inchannel       0.0643    0.0349      1.84 6.54e- 2
+    ## 5 submerged_aquatic_veg_inchannel  -0.193     0.0810     -2.38 1.73e- 2
+    ## 6 no_cover_ovhead                  -0.477     0.0460    -10.4  4.16e-25
+
+``` r
+sig_predictors <- log_reg_model |> tidy() |> filter(p.value < 0.1) |> filter(term != "(Intercept)") |>  pull(term)
+
+predictions <- predict(log_reg_model, log_3_data, type = "prob") |> 
+  bind_cols(log_3_data) 
+```
+
+### Results
+
+The following predictors were found to significantly effect fish
+presence: fine_substrate, sand_substrate, small_gravel_substrate,
+small_woody_cover_inchannel, submerged_aquatic_veg_inchannel,
+no_cover_ovhead.
+
+``` r
+predictions |> 
+  ggplot(aes(x = as.factor(fine_substrate), y = .pred_1)) +
+  geom_boxplot() + 
+  labs(title = paste("Predicted Probability vs. fine_substrate"),
+         y = 'Probability of Fish Presence')
+```
+
+    ## Warning: Removed 82 rows containing non-finite values (`stat_boxplot()`).
+
+![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
+
+``` r
+predictions |> 
+  ggplot(aes(x = as.factor(sand_substrate), y = .pred_1)) +
+  geom_boxplot() + 
+  labs(title = paste("Predicted Probability vs. sand_substrate"),
+         y = 'Probability of Fish Presence')
+```
+
+    ## Warning: Removed 82 rows containing non-finite values (`stat_boxplot()`).
+
+![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-13-2.png)<!-- -->
+
+``` r
+predictions |> 
+  ggplot(aes(x = as.factor(small_gravel_substrate), y = .pred_1)) +
+  geom_boxplot() + 
+  labs(title = paste("Predicted Probability vs. small_gravel_substrate"),
+         y = 'Probability of Fish Presence')
+```
+
+    ## Warning: Removed 82 rows containing non-finite values (`stat_boxplot()`).
+
+![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-13-3.png)<!-- -->
+
+``` r
+predictions |> 
+  ggplot(aes(x = as.factor(small_woody_cover_inchannel), y = .pred_1)) +
+  geom_boxplot() + 
+  labs(title = paste("Predicted Probability vs. small_woody_cover_inchannel"),
+         y = 'Probability of Fish Presence')
+```
+
+    ## Warning: Removed 82 rows containing non-finite values (`stat_boxplot()`).
+
+![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-13-4.png)<!-- -->
+
+``` r
+predictions |> 
+  ggplot(aes(x = as.factor(submerged_aquatic_veg_inchannel), y = .pred_1)) +
+  geom_boxplot() + 
+  labs(title = paste("Predicted Probability vs. submerged_aquatic_veg_inchannel"),
+         y = 'Probability of Fish Presence')
+```
+
+    ## Warning: Removed 82 rows containing non-finite values (`stat_boxplot()`).
+
+![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-13-5.png)<!-- -->
+
+``` r
+predictions |> 
+  ggplot(aes(x = as.factor(no_cover_ovhead), y = .pred_1)) +
+  geom_boxplot() + 
+  labs(title = paste("Predicted Probability vs. no_cover_ovhead"),
+         y = 'Probability of Fish Presence')
+```
+
+    ## Warning: Removed 82 rows containing non-finite values (`stat_boxplot()`).
+
+![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-13-6.png)<!-- -->
 
 ``` r
 knitr::knit_exit()
