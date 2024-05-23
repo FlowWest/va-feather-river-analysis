@@ -1,7 +1,7 @@
 Mini Snorkel Feather HSC Using Logistic Regression
 ================
 Maddee Rubenson
-2024-05-16
+2024-05-23
 
 - [Objective](#objective)
 - [Pre-process data](#pre-process-data)
@@ -18,8 +18,11 @@ Maddee Rubenson
   Dominance](#logistic-regression-4-cover-variables-by-dominance)
   - [Build Model](#build-model-2)
   - [Results](#results-3)
-- [Hurdle Model](#hurdle-model)
+- [Hurdle Model - Binary Cover
+  Values](#hurdle-model---binary-cover-values)
   - [Results](#results-4)
+- [Hurdle Model - with values](#hurdle-model---with-values)
+  - [Results](#results-5)
 
 ## Objective
 
@@ -763,7 +766,7 @@ plots
 
 ![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-16-4.png)<!-- -->
 
-## Hurdle Model
+## Hurdle Model - Binary Cover Values
 
 A hurdle model was used in Gard 2024 to test for the effects of cover
 and habitat type on the total abundance of Chinook salmon at both site
@@ -805,6 +808,9 @@ increase in the predictor is associated with a 50% increase in the odds
 of having a zero count versus a positive count, assuming all other
 variables are held constant.
 
+**Notes** For this hurdle model, chose to make all substrate and cover
+variables presence/absence based on a 20% threshold
+
 **Predictors**
 
 - small woody inchannel + half meter overhead
@@ -820,55 +826,20 @@ variables are held constant.
 - more than half meter overhead
 - small woody half meter overhead
 - small woody more than half meter overhead
-
-**Notes** - Currently using all cover variables as 0/1 if they meet a
-20% threshold. Would like to explore other options.
+- velocity
+- depth
 
 ``` r
 # use a hurdle model (Gard 2024); 
 # pre-processing - all numeric values must be rounded to whole numbers
-
-# test <- mini_snorkel_model_ready |> 
-#   rowwise() |> 
-#   mutate(fine_substrate = percent_fine_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_fine_substrate", 'perc_total']$perc_total),
-#          sand_substrate = percent_sand_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_sand_substrate", 'perc_total']$perc_total),
-#          small_gravel = percent_small_gravel_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_small_gravel_substrate", 'perc_total']$perc_total),
-#          large_gravel = percent_large_gravel_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_large_gravel_substrate", 'perc_total']$perc_total),
-#          cobble_substrate = percent_cobble_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_cobble_substrate", 'perc_total']$perc_total),
-#          boulder_substrate = percent_boulder_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_boulder_substrate", 'perc_total']$perc_total)) |> 
-#   select(-c(percent_fine_substrate:percent_boulder_substrate)) |> 
-#   mutate(woody_debris = sum(percent_large_woody_cover_inchannel, percent_small_woody_cover_inchannel),
-#          overhead_cover = sum(percent_cover_half_meter_overhead, percent_cover_more_than_half_meter_overhead)
-#          ) |> 
-#   select(-c(percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_cover_more_than_half_meter_overhead, percent_cover_half_meter_overhead)) |> 
-#   select(-channel_geomorphic_unit, -micro_hab_data_tbl_id, -location_table_id, -fish_data_id,
-#          -focal_velocity, -dist_to_bottom, -fl_mm, -species,  -transect_code, -date, -surface_turbidity) |> 
-#   select(-(contains("no_cover"))) |> 
-#   distinct() |> 
-#   na.omit() |> 
-#   as_tibble() |> 
-#   select(-fish_presence) |> 
-#   mutate_all(~ round(., digits = 0))
-
-# hurdle_data <- mini_snorkel_model_ready |> 
-#    select(count, depth, velocity, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank") |> 
-#   # create new cover variables, based off Gard 2023
-#   mutate(small_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_small_woody_cover_inchannel,
-#          small_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_small_woody_cover_inchannel) |> 
-#   mutate(percent_cobble_substrate = percent_cobble_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_cobble_substrate", 'perc_total']$perc_total),
-#          percent_boulder_substrate = percent_boulder_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_boulder_substrate", 'perc_total']$perc_total)) |> 
-#   select(-(contains("no_cover"))) |> 
-#   mutate_all(~ round(., digits = 0)) |> 
-#   na.omit() |> glimpse()
-
-hurdle_data <- mini_snorkel_model_ready |> 
-    select(count, depth, velocity, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank") |> 
+hurdle_data <- mini_snorkel_model_ready |>
+    select(count, depth, velocity, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank") |>
   # create new cover variables, based off Gard 2023
   mutate(small_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_small_woody_cover_inchannel,
          small_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_small_woody_cover_inchannel,
          large_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_large_woody_cover_inchannel,
-         large_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_large_woody_cover_inchannel) |> 
-  # transform to presence/absence based on a defined threshold 
+         large_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_large_woody_cover_inchannel) |>
+  # transform to presence/absence based on a defined threshold
   mutate(cobble_substrate = ifelse(percent_cobble_substrate >= percent_threshold, 1, 0 ),
          boulder_substrate = ifelse(percent_boulder_substrate >= percent_threshold, 1, 0 ),
          small_woody_cover_inchannel = ifelse(percent_small_woody_cover_inchannel >= percent_threshold, 1, 0 ),
@@ -877,17 +848,17 @@ hurdle_data <- mini_snorkel_model_ready |>
          undercut_bank = ifelse(percent_undercut_bank >= percent_threshold, 1, 0),
          no_cover_overhead = ifelse(percent_no_cover_overhead >= percent_threshold, 1, 0),
          half_meter_overhead = ifelse(percent_cover_half_meter_overhead >= percent_threshold, 1, 0),
-         cover_more_than_half_meter_overhead = ifelse(percent_cover_more_than_half_meter_overhead >= percent_threshold, 1, 0),      
-         no_cover_inchannel = ifelse(percent_no_cover_inchannel >= percent_threshold, 1, 0),      
+         cover_more_than_half_meter_overhead = ifelse(percent_cover_more_than_half_meter_overhead >= percent_threshold, 1, 0),
+         no_cover_inchannel = ifelse(percent_no_cover_inchannel >= percent_threshold, 1, 0),
          small_woody_half_meter_overhead = ifelse(small_woody_inchannel_and_half_meter_overhead >= percent_threshold, 1, 0),
          small_woody_cover_more_than_half_meter_overhead = ifelse(small_woody_inchannel_and_more_than_half_meter_overhead >= percent_threshold, 1, 0),
          large_woody_inchannel_and_half_meter_overhead = ifelse(large_woody_inchannel_and_more_than_half_meter_overhead >= percent_threshold, 1, 0),
-         large_woody_cover_more_than_half_meter_overhead = ifelse(large_woody_inchannel_and_more_than_half_meter_overhead >= percent_threshold, 1, 0)) |> 
-  select(count, depth, velocity, cobble_substrate:large_woody_cover_more_than_half_meter_overhead) |> 
+         large_woody_cover_more_than_half_meter_overhead = ifelse(large_woody_inchannel_and_more_than_half_meter_overhead >= percent_threshold, 1, 0)) |>
+  select(count, depth, velocity, cobble_substrate:large_woody_cover_more_than_half_meter_overhead) |>
   # remove no cover variables (no cover overhead, no cover in channel)
-  select(-contains("no_cover")) |> 
-  mutate_all(~ round(., digits = 0)) |> 
-  na.omit() |> 
+  select(-contains("no_cover")) |>
+  mutate_all(~ round(., digits = 0)) |>
+  na.omit() |>
   glimpse()
 ```
 
@@ -909,40 +880,35 @@ hurdle_data <- mini_snorkel_model_ready |>
     ## $ large_woody_cover_more_than_half_meter_overhead <dbl> 0, 0, 0, 0, 0, 0, 1, 0…
 
 ``` r
-hurdle_model <- pscl::hurdle(count ~ ., data = hurdle_data) 
+hurdle_model <- pscl::hurdle(count ~ small_woody_cover_inchannel + depth + velocity + large_woody_cover_inchannel + submerged_aquatic_veg_inchannel + cover_more_than_half_meter_overhead + half_meter_overhead + cobble_substrate + boulder_substrate + undercut_bank, data = hurdle_data, dist = "negbin") 
+# Negative Binomial Distribution: The Negative Binomial distribution is more flexible than the Poisson distribution and is used when the variance of the counts is greater than the mean, which is known as overdispersion. The Negative Binomial model allows for the variance to be larger than the mean, which is common in count data where there is extra variability beyond what is expected from a Poisson distribution.
+
 
 # zero inflated models are capable of dealing with excess zero counts
 # NOTE: Chose to not use a zero inflated model because it operates under the assumption that excess zeros are generated by a separate process from the count values. 
 # zeroinf_model <- pscl::zeroinfl(count ~ ., data = hurdle_data) # , zero.dist = "binomial", dist = "negbin"
 
-#summary(hurdle_model)
-#summary(zeroinf_model)
-
 best_model_hurdle <- MASS::stepAIC(hurdle_model, trace = TRUE)
 ```
 
-    ## Start:  AIC=53408.07
-    ## count ~ depth + velocity + cobble_substrate + boulder_substrate + 
-    ##     small_woody_cover_inchannel + large_woody_cover_inchannel + 
-    ##     submerged_aquatic_veg_inchannel + undercut_bank + half_meter_overhead + 
-    ##     cover_more_than_half_meter_overhead + small_woody_half_meter_overhead + 
-    ##     small_woody_cover_more_than_half_meter_overhead + large_woody_cover_more_than_half_meter_overhead
+    ## Start:  AIC=5255.72
+    ## count ~ small_woody_cover_inchannel + depth + velocity + large_woody_cover_inchannel + 
+    ##     submerged_aquatic_veg_inchannel + cover_more_than_half_meter_overhead + 
+    ##     half_meter_overhead + cobble_substrate + boulder_substrate + 
+    ##     undercut_bank
     ## 
-    ##                                                   Df   AIC
-    ## <none>                                               53408
-    ## - large_woody_cover_more_than_half_meter_overhead  2 53432
-    ## - small_woody_half_meter_overhead                  2 53500
-    ## - cover_more_than_half_meter_overhead              2 53563
-    ## - boulder_substrate                                2 53573
-    ## - half_meter_overhead                              2 53604
-    ## - large_woody_cover_inchannel                      2 53636
-    ## - small_woody_cover_inchannel                      2 53875
-    ## - small_woody_cover_more_than_half_meter_overhead  2 53984
-    ## - cobble_substrate                                 2 54028
-    ## - submerged_aquatic_veg_inchannel                  2 54101
-    ## - undercut_bank                                    2 54386
-    ## - depth                                            2 55626
-    ## - velocity                                         2 55651
+    ##                                       Df    AIC
+    ## <none>                                   5255.7
+    ## - submerged_aquatic_veg_inchannel      2 5256.1
+    ## - boulder_substrate                    2 5256.2
+    ## - velocity                             2 5258.0
+    ## - cobble_substrate                     2 5258.8
+    ## - large_woody_cover_inchannel          2 5261.0
+    ## - half_meter_overhead                  2 5262.4
+    ## - small_woody_cover_inchannel          2 5275.6
+    ## - depth                                2 5278.1
+    ## - undercut_bank                        2 5284.8
+    ## - cover_more_than_half_meter_overhead  2 5297.3
 
 ``` r
 summary(best_model_hurdle)
@@ -950,95 +916,610 @@ summary(best_model_hurdle)
 
     ## 
     ## Call:
-    ## pscl::hurdle(formula = count ~ depth + velocity + cobble_substrate + 
-    ##     boulder_substrate + small_woody_cover_inchannel + large_woody_cover_inchannel + 
-    ##     submerged_aquatic_veg_inchannel + undercut_bank + half_meter_overhead + 
-    ##     cover_more_than_half_meter_overhead + small_woody_half_meter_overhead + 
-    ##     small_woody_cover_more_than_half_meter_overhead + large_woody_cover_more_than_half_meter_overhead, 
-    ##     data = hurdle_data)
+    ## pscl::hurdle(formula = count ~ small_woody_cover_inchannel + depth + 
+    ##     velocity + large_woody_cover_inchannel + submerged_aquatic_veg_inchannel + 
+    ##     cover_more_than_half_meter_overhead + half_meter_overhead + cobble_substrate + 
+    ##     boulder_substrate + undercut_bank, data = hurdle_data, dist = "negbin")
     ## 
     ## Pearson residuals:
-    ##     Min      1Q  Median      3Q     Max 
-    ## -1.4350 -0.2299 -0.2233 -0.2189 65.1671 
+    ##      Min       1Q   Median       3Q      Max 
+    ## -0.60110 -0.11861 -0.10449 -0.09654 33.95121 
     ## 
-    ## Count model coefficients (truncated poisson with log link):
-    ##                                                   Estimate Std. Error z value
-    ## (Intercept)                                      3.9802584  0.0171471 232.124
-    ## depth                                            0.0094379  0.0001799  52.473
-    ## velocity                                        -0.6469442  0.0150570 -42.966
-    ## cobble_substrate                                -0.4773785  0.0197716 -24.145
-    ## boulder_substrate                               -0.3589912  0.0290574 -12.355
-    ## small_woody_cover_inchannel                      0.6028703  0.0287729  20.953
-    ## large_woody_cover_inchannel                     -0.9665242  0.0738596 -13.086
-    ## submerged_aquatic_veg_inchannel                 -0.5038164  0.0199169 -25.296
-    ## undercut_bank                                   -1.5639793  0.0619752 -25.236
-    ## half_meter_overhead                             -0.3367714  0.0238348 -14.129
-    ## cover_more_than_half_meter_overhead              1.9476400  0.1829837  10.644
-    ## small_woody_half_meter_overhead                  0.2895743  0.0308604   9.383
-    ## small_woody_cover_more_than_half_meter_overhead -0.8561119  0.0369984 -23.139
-    ## large_woody_cover_more_than_half_meter_overhead -0.8687301  0.1813923  -4.789
-    ##                                                             Pr(>|z|)    
-    ## (Intercept)                                     < 0.0000000000000002 ***
-    ## depth                                           < 0.0000000000000002 ***
-    ## velocity                                        < 0.0000000000000002 ***
-    ## cobble_substrate                                < 0.0000000000000002 ***
-    ## boulder_substrate                               < 0.0000000000000002 ***
-    ## small_woody_cover_inchannel                     < 0.0000000000000002 ***
-    ## large_woody_cover_inchannel                     < 0.0000000000000002 ***
-    ## submerged_aquatic_veg_inchannel                 < 0.0000000000000002 ***
-    ## undercut_bank                                   < 0.0000000000000002 ***
-    ## half_meter_overhead                             < 0.0000000000000002 ***
-    ## cover_more_than_half_meter_overhead             < 0.0000000000000002 ***
-    ## small_woody_half_meter_overhead                 < 0.0000000000000002 ***
-    ## small_woody_cover_more_than_half_meter_overhead < 0.0000000000000002 ***
-    ## large_woody_cover_more_than_half_meter_overhead           0.00000167 ***
+    ## Count model coefficients (truncated negbin with log link):
+    ##                                       Estimate Std. Error z value  Pr(>|z|)    
+    ## (Intercept)                          -8.350599  65.055776  -0.128  0.897864    
+    ## small_woody_cover_inchannel           0.040682   0.353920   0.115  0.908488    
+    ## depth                                 0.036916   0.008621   4.282 0.0000185 ***
+    ## velocity                             -0.550516   0.209553  -2.627  0.008612 ** 
+    ## large_woody_cover_inchannel          -1.816126   0.745945  -2.435  0.014906 *  
+    ## submerged_aquatic_veg_inchannel      -0.780161   0.355983  -2.192  0.028411 *  
+    ## cover_more_than_half_meter_overhead   1.219765   0.373775   3.263  0.001101 ** 
+    ## half_meter_overhead                   0.348885   0.345088   1.011  0.312016    
+    ## cobble_substrate                     -0.981416   0.340406  -2.883  0.003938 ** 
+    ## boulder_substrate                    -0.261675   0.506050  -0.517  0.605092    
+    ## undercut_bank                        -2.382870   0.655031  -3.638  0.000275 ***
+    ## Log(theta)                          -12.961943  65.055122  -0.199  0.842071    
     ## Zero hurdle model coefficients (binomial with logit link):
-    ##                                                  Estimate Std. Error z value
-    ## (Intercept)                                     -2.964001   0.125028 -23.707
-    ## depth                                           -0.001452   0.002679  -0.542
-    ## velocity                                         0.052568   0.078132   0.673
-    ## cobble_substrate                                 0.004387   0.130609   0.034
-    ## boulder_substrate                                0.425280   0.200185   2.124
-    ## small_woody_cover_inchannel                      0.274677   0.256615   1.070
-    ## large_woody_cover_inchannel                      0.672272   0.563026   1.194
-    ## submerged_aquatic_veg_inchannel                 -0.062598   0.139175  -0.450
-    ## undercut_bank                                    1.806283   0.379691   4.757
-    ## half_meter_overhead                             -0.028728   0.226460  -0.127
-    ## cover_more_than_half_meter_overhead              0.429132   0.718150   0.598
-    ## small_woody_half_meter_overhead                  0.852581   0.258357   3.300
-    ## small_woody_cover_more_than_half_meter_overhead  0.049709   0.299544   0.166
-    ## large_woody_cover_more_than_half_meter_overhead  0.460340   0.721282   0.638
-    ##                                                             Pr(>|z|)    
-    ## (Intercept)                                     < 0.0000000000000002 ***
-    ## depth                                                       0.587744    
-    ## velocity                                                    0.501072    
-    ## cobble_substrate                                            0.973207    
-    ## boulder_substrate                                           0.033634 *  
-    ## small_woody_cover_inchannel                                 0.284445    
-    ## large_woody_cover_inchannel                                 0.232465    
-    ## submerged_aquatic_veg_inchannel                             0.652869    
-    ## undercut_bank                                             0.00000196 ***
-    ## half_meter_overhead                                         0.899055    
-    ## cover_more_than_half_meter_overhead                         0.550138    
-    ## small_woody_half_meter_overhead                             0.000967 ***
-    ## small_woody_cover_more_than_half_meter_overhead             0.868198    
-    ## large_woody_cover_more_than_half_meter_overhead             0.523328    
+    ##                                      Estimate Std. Error z value
+    ## (Intercept)                         -2.891742   0.122089 -23.685
+    ## small_woody_cover_inchannel          0.821247   0.160976   5.102
+    ## depth                               -0.001676   0.002690  -0.623
+    ## velocity                             0.029183   0.077630   0.376
+    ## large_woody_cover_inchannel          0.964602   0.390590   2.470
+    ## submerged_aquatic_veg_inchannel     -0.009782   0.137694  -0.071
+    ## cover_more_than_half_meter_overhead  0.965733   0.157195   6.144
+    ## half_meter_overhead                  0.518136   0.163322   3.172
+    ## cobble_substrate                     0.004003   0.130341   0.031
+    ## boulder_substrate                    0.424974   0.199575   2.129
+    ## undercut_bank                        1.939588   0.377417   5.139
+    ##                                                 Pr(>|z|)    
+    ## (Intercept)                         < 0.0000000000000002 ***
+    ## small_woody_cover_inchannel               0.000000336661 ***
+    ## depth                                            0.53316    
+    ## velocity                                         0.70698    
+    ## large_woody_cover_inchannel                      0.01353 *  
+    ## submerged_aquatic_veg_inchannel                  0.94336    
+    ## cover_more_than_half_meter_overhead       0.000000000807 ***
+    ## half_meter_overhead                              0.00151 ** 
+    ## cobble_substrate                                 0.97550    
+    ## boulder_substrate                                0.03322 *  
+    ## undercut_bank                             0.000000276050 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1 
     ## 
-    ## Number of iterations in BFGS optimization: 30 
-    ## Log-likelihood: -2.668e+04 on 28 Df
+    ## Theta: count = 0
+    ## Number of iterations in BFGS optimization: 35 
+    ## Log-likelihood: -2605 on 23 Df
+
+### Results
+
+    ## Learn more about sjPlot with 'browseVignettes("sjPlot")'.
+
+<table style="border-collapse:collapse; border:none;">
+<tr>
+<th style="border-top: double; text-align:center; font-style:normal; font-weight:bold; padding:0.2cm;  text-align:left; ">
+ 
+</th>
+<th colspan="3" style="border-top: double; text-align:center; font-style:normal; font-weight:bold; padding:0.2cm; ">
+count
+</th>
+</tr>
+<tr>
+<td style=" text-align:center; border-bottom:1px solid; font-style:italic; font-weight:normal;  text-align:left; ">
+Predictors
+</td>
+<td style=" text-align:center; border-bottom:1px solid; font-style:italic; font-weight:normal;  ">
+Incidence Rate Ratios
+</td>
+<td style=" text-align:center; border-bottom:1px solid; font-style:italic; font-weight:normal;  ">
+CI
+</td>
+<td style=" text-align:center; border-bottom:1px solid; font-style:italic; font-weight:normal;  ">
+p
+</td>
+</tr>
+<tr>
+<td colspan="5" style="font-weight:bold; text-align:left; padding-top:.8em;">
+Count Model
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+(Intercept)
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.00
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.00 – 5609932622520279167190621446948155017250162631245824.00
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.898
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+small woody cover<br>inchannel
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.04
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.52 – 2.08
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.908
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+depth
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.04
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.02 – 1.06
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+<strong>\<0.001</strong>
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+velocity
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.58
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.38 – 0.87
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+<strong>0.009</strong>
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+large woody cover<br>inchannel
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.16
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.04 – 0.70
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+<strong>0.015</strong>
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+submerged aquatic veg<br>inchannel
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.46
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.23 – 0.92
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+<strong>0.028</strong>
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+cover more than half<br>meter overhead
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+3.39
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.63 – 7.05
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+<strong>0.001</strong>
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+half meter overhead
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.42
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.72 – 2.79
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.312
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+cobble substrate
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.37
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.19 – 0.73
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+<strong>0.004</strong>
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+boulder substrate
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.77
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.29 – 2.08
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.605
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+undercut bank
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.09
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.03 – 0.33
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+<strong>\<0.001</strong>
+</td>
+</tr>
+<tr>
+<td colspan="4" style="font-weight:bold; text-align:left; padding-top:.8em;">
+Zero-Inflated Model
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+(Intercept)
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.06
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.04 – 0.07
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+<strong>\<0.001</strong>
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+small woody cover<br>inchannel
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+2.27
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.66 – 3.12
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+<strong>\<0.001</strong>
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+depth
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.00
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.99 – 1.00
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.533
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+velocity
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.03
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.88 – 1.20
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.707
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+large woody cover<br>inchannel
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+2.62
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.22 – 5.64
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+<strong>0.014</strong>
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+submerged aquatic veg<br>inchannel
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.99
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.76 – 1.30
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.943
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+cover more than half<br>meter overhead
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+2.63
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.93 – 3.57
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+<strong>\<0.001</strong>
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+half meter overhead
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.68
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.22 – 2.31
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+<strong>0.002</strong>
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+cobble substrate
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.00
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.78 – 1.30
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.975
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+boulder substrate
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.53
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.03 – 2.26
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+<strong>0.033</strong>
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+undercut bank
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+6.96
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+3.32 – 14.58
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+<strong>\<0.001</strong>
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; padding-top:0.1cm; padding-bottom:0.1cm; border-top:1px solid;">
+Observations
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; padding-top:0.1cm; padding-bottom:0.1cm; text-align:left; border-top:1px solid;" colspan="3">
+4936
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; padding-top:0.1cm; padding-bottom:0.1cm;">
+R<sup>2</sup> / R<sup>2</sup> adjusted
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; padding-top:0.1cm; padding-bottom:0.1cm; text-align:left;" colspan="3">
+0.999 / 0.999
+</td>
+</tr>
+</table>
+
+## Hurdle Model - with values
+
+This hurdle model uses substrate and cover percent values.
+
+**Predictors**
+
+- depth
+
+- velocity
+
+- percent large woody cover in channel
+
+- percent small woody cover in channel
+
+- percent cover half meter overhead
+
+- percent cover more than half meter overhead
+
+- percent cobble
+
+- percent boulder
+
+- percent undercut bank
+
+**Notes** \*
+
+- removed combined cover variables (small and large woody in channel
+  with cover overhead) because of issues with collinearity within the
+  hurdle model
+
+``` r
+# use a hurdle model (Gard 2024); 
+# pre-processing - all numeric values must be rounded to whole numbers
+
+# WIP
+hurdle_data <- mini_snorkel_model_ready |>
+    select(count, depth, velocity, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank") |>
+  # create new cover variables, based off Gard 2023
+  mutate(small_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_small_woody_cover_inchannel,
+         small_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_small_woody_cover_inchannel,
+         large_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_large_woody_cover_inchannel,
+         large_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_large_woody_cover_inchannel) |>
+  # remove no cover variables (no cover overhead, no cover in channel)
+  select(-contains("no_cover")) |>
+  #mutate_all(~ round(., digits = 0)) |>
+  na.omit() |>
+  distinct() |>
+  glimpse()
+```
+
+    ## Rows: 4,296
+    ## Columns: 15
+    ## $ count                                                   <dbl> 2, 3, 1, 0, 0,…
+    ## $ depth                                                   <dbl> 17, 17, 17, 19…
+    ## $ velocity                                                <dbl> 0.22, 0.22, 0.…
+    ## $ percent_small_woody_cover_inchannel                     <dbl> 15, 15, 15, 0,…
+    ## $ percent_large_woody_cover_inchannel                     <dbl> 0, 0, 0, 0, 0,…
+    ## $ percent_submerged_aquatic_veg_inchannel                 <dbl> 10, 10, 10, 0,…
+    ## $ percent_cover_half_meter_overhead                       <dbl> 0, 0, 0, 0, 0,…
+    ## $ percent_cover_more_than_half_meter_overhead             <dbl> 0, 0, 0, 0, 0,…
+    ## $ percent_cobble_substrate                                <dbl> 10, 10, 10, 0,…
+    ## $ percent_boulder_substrate                               <dbl> 0, 0, 0, 0, 0,…
+    ## $ percent_undercut_bank                                   <dbl> 0, 0, 0, 0, 0,…
+    ## $ small_woody_inchannel_and_half_meter_overhead           <dbl> 15, 15, 15, 0,…
+    ## $ small_woody_inchannel_and_more_than_half_meter_overhead <dbl> 15, 15, 15, 0,…
+    ## $ large_woody_inchannel_and_half_meter_overhead           <dbl> 0, 0, 0, 0, 0,…
+    ## $ large_woody_inchannel_and_more_than_half_meter_overhead <dbl> 0, 0, 0, 0, 0,…
+
+``` r
+hurdle_model <- pscl::hurdle(count ~ percent_small_woody_cover_inchannel + depth + velocity + percent_large_woody_cover_inchannel + percent_submerged_aquatic_veg_inchannel + percent_cover_more_than_half_meter_overhead + percent_cover_half_meter_overhead + percent_cobble_substrate + percent_boulder_substrate + percent_undercut_bank, data = hurdle_data, dist = "negbin") 
+# Negative Binomial Distribution: The Negative Binomial distribution is more flexible than the Poisson distribution and is used when the variance of the counts is greater than the mean, which is known as overdispersion. The Negative Binomial model allows for the variance to be larger than the mean, which is common in count data where there is extra variability beyond what is expected from a Poisson distribution.
+
+best_model_hurdle <- MASS::stepAIC(hurdle_model, trace = TRUE)
+```
+
+    ## Start:  AIC=4928.93
+    ## count ~ percent_small_woody_cover_inchannel + depth + velocity + 
+    ##     percent_large_woody_cover_inchannel + percent_submerged_aquatic_veg_inchannel + 
+    ##     percent_cover_more_than_half_meter_overhead + percent_cover_half_meter_overhead + 
+    ##     percent_cobble_substrate + percent_boulder_substrate + percent_undercut_bank
+    ## 
+    ##                                               Df    AIC
+    ## - percent_cover_half_meter_overhead            2 4928.5
+    ## <none>                                           4928.9
+    ## - velocity                                     2 4929.4
+    ## - percent_submerged_aquatic_veg_inchannel      2 4930.7
+    ## - percent_large_woody_cover_inchannel          2 4931.2
+    ## - percent_boulder_substrate                    2 4932.1
+    ## - percent_cobble_substrate                     2 4933.5
+    ## - depth                                        2 4950.0
+    ## - percent_undercut_bank                        2 4951.1
+    ## - percent_cover_more_than_half_meter_overhead  2 4957.7
+    ## - percent_small_woody_cover_inchannel          2 4962.8
+    ## 
+    ## Step:  AIC=4928.53
+    ## count ~ percent_small_woody_cover_inchannel + depth + velocity + 
+    ##     percent_large_woody_cover_inchannel + percent_submerged_aquatic_veg_inchannel + 
+    ##     percent_cover_more_than_half_meter_overhead + percent_cobble_substrate + 
+    ##     percent_boulder_substrate + percent_undercut_bank
+    ## 
+    ##                                               Df    AIC
+    ## <none>                                           4928.5
+    ## - velocity                                     2 4929.3
+    ## - percent_submerged_aquatic_veg_inchannel      2 4929.5
+    ## - percent_boulder_substrate                    2 4931.6
+    ## - percent_large_woody_cover_inchannel          2 4931.8
+    ## - percent_cobble_substrate                     2 4932.7
+    ## - depth                                        2 4949.9
+    ## - percent_undercut_bank                        2 4952.0
+    ## - percent_cover_more_than_half_meter_overhead  2 4958.8
+    ## - percent_small_woody_cover_inchannel          2 4971.6
+
+``` r
+summary(best_model_hurdle)
+```
+
+    ## 
+    ## Call:
+    ## pscl::hurdle(formula = count ~ percent_small_woody_cover_inchannel + 
+    ##     depth + velocity + percent_large_woody_cover_inchannel + percent_submerged_aquatic_veg_inchannel + 
+    ##     percent_cover_more_than_half_meter_overhead + percent_cobble_substrate + 
+    ##     percent_boulder_substrate + percent_undercut_bank, data = hurdle_data, 
+    ##     dist = "negbin")
+    ## 
+    ## Pearson residuals:
+    ##     Min      1Q  Median      3Q     Max 
+    ## -0.8654 -0.1247 -0.1130 -0.1006 27.3291 
+    ## 
+    ## Count model coefficients (truncated negbin with log link):
+    ##                                               Estimate Std. Error z value
+    ## (Intercept)                                  -7.869921  64.111158  -0.123
+    ## percent_small_woody_cover_inchannel           0.012181   0.008480   1.436
+    ## depth                                         0.034592   0.008763   3.948
+    ## velocity                                     -0.537110   0.290272  -1.850
+    ## percent_large_woody_cover_inchannel          -0.031976   0.022022  -1.452
+    ## percent_submerged_aquatic_veg_inchannel      -0.017317   0.008513  -2.034
+    ## percent_cover_more_than_half_meter_overhead   0.012348   0.007787   1.586
+    ## percent_cobble_substrate                     -0.019720   0.006681  -2.952
+    ## percent_boulder_substrate                    -0.017792   0.010234  -1.738
+    ## percent_undercut_bank                        -0.092104   0.038665  -2.382
+    ## Log(theta)                                  -12.627604  64.110325  -0.197
+    ##                                              Pr(>|z|)    
+    ## (Intercept)                                   0.90230    
+    ## percent_small_woody_cover_inchannel           0.15086    
+    ## depth                                       0.0000789 ***
+    ## velocity                                      0.06426 .  
+    ## percent_large_woody_cover_inchannel           0.14651    
+    ## percent_submerged_aquatic_veg_inchannel       0.04192 *  
+    ## percent_cover_more_than_half_meter_overhead   0.11282    
+    ## percent_cobble_substrate                      0.00316 ** 
+    ## percent_boulder_substrate                     0.08213 .  
+    ## percent_undercut_bank                         0.01721 *  
+    ## Log(theta)                                    0.84385    
+    ## Zero hurdle model coefficients (binomial with logit link):
+    ##                                              Estimate Std. Error z value
+    ## (Intercept)                                 -2.537487   0.134986 -18.798
+    ## percent_small_woody_cover_inchannel          0.024230   0.003400   7.126
+    ## depth                                       -0.004707   0.002796  -1.683
+    ## velocity                                    -0.120061   0.090332  -1.329
+    ## percent_large_woody_cover_inchannel          0.025770   0.010271   2.509
+    ## percent_submerged_aquatic_veg_inchannel     -0.003011   0.002750  -1.095
+    ## percent_cover_more_than_half_meter_overhead  0.014066   0.002336   6.021
+    ## percent_cobble_substrate                    -0.002904   0.002868  -1.013
+    ## percent_boulder_substrate                    0.010064   0.004368   2.304
+    ## percent_undercut_bank                        0.077226   0.015273   5.056
+    ##                                                         Pr(>|z|)    
+    ## (Intercept)                                 < 0.0000000000000002 ***
+    ## percent_small_woody_cover_inchannel             0.00000000000103 ***
+    ## depth                                                     0.0923 .  
+    ## velocity                                                  0.1838    
+    ## percent_large_woody_cover_inchannel                       0.0121 *  
+    ## percent_submerged_aquatic_veg_inchannel                   0.2735    
+    ## percent_cover_more_than_half_meter_overhead     0.00000000173195 ***
+    ## percent_cobble_substrate                                  0.3112    
+    ## percent_boulder_substrate                                 0.0212 *  
+    ## percent_undercut_bank                           0.00000042722806 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1 
+    ## 
+    ## Theta: count = 0
+    ## Number of iterations in BFGS optimization: 48 
+    ## Log-likelihood: -2443 on 21 Df
 
 ### Results
 
 ``` r
-# plot(factor(count == 0) ~ boulder_substrate + large_woody_cover_inchannel + undercut_bank + cover_more_than_half_meter_overhead + small_woody_half_meter_overhead, data = hurdle_data, main = "Zero")
-# plot(log(count) ~ boulder_substrate + large_woody_cover_inchannel + undercut_bank + cover_more_than_half_meter_overhead + small_woody_half_meter_overhead, data = hurdle_data, subset = count > 0,
-#   main = "Count")
-
-library(sjPlot)
-library(emmeans)
-
 tab_model(best_model_hurdle)
 ```
 
@@ -1075,13 +1556,27 @@ Count Model
 (Intercept)
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-53.53
+0.00
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-51.76 – 55.36
+0.00 – 1424470627436194294630875298467419750701597032710144.00
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-<strong>\<0.001</strong>
+0.902
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+percent small woody cover<br>inchannel
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.01
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.00 – 1.03
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+0.151
 </td>
 </tr>
 <tr>
@@ -1089,10 +1584,10 @@ Count Model
 depth
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-1.01
+1.04
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-1.01 – 1.01
+1.02 – 1.05
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
 <strong>\<0.001</strong>
@@ -1103,167 +1598,97 @@ depth
 velocity
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.52
+0.58
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.51 – 0.54
+0.33 – 1.03
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-<strong>\<0.001</strong>
+0.064
 </td>
 </tr>
 <tr>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-cobble substrate
+percent large woody cover<br>inchannel
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.62
+0.97
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.60 – 0.64
+0.93 – 1.01
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-<strong>\<0.001</strong>
+0.147
 </td>
 </tr>
 <tr>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-boulder substrate
+percent submerged aquatic<br>veg inchannel
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.70
+0.98
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.66 – 0.74
+0.97 – 1.00
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-<strong>\<0.001</strong>
+<strong>0.042</strong>
 </td>
 </tr>
 <tr>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-small woody cover<br>inchannel
+percent cover more than<br>half meter overhead
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-1.83
+1.01
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-1.73 – 1.93
+1.00 – 1.03
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-<strong>\<0.001</strong>
+0.113
 </td>
 </tr>
 <tr>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-large woody cover<br>inchannel
+percent cobble substrate
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.38
+0.98
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.33 – 0.44
+0.97 – 0.99
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-<strong>\<0.001</strong>
+<strong>0.003</strong>
 </td>
 </tr>
 <tr>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-submerged aquatic veg<br>inchannel
+percent boulder substrate
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.60
+0.98
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.58 – 0.63
+0.96 – 1.00
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-<strong>\<0.001</strong>
+0.082
 </td>
 </tr>
 <tr>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-undercut bank
+percent undercut bank
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.21
+0.91
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.19 – 0.24
+0.85 – 0.98
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-<strong>\<0.001</strong>
-</td>
-</tr>
-<tr>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-half meter overhead
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.71
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.68 – 0.75
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-<strong>\<0.001</strong>
-</td>
-</tr>
-<tr>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-cover more than half<br>meter overhead
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-7.01
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-4.90 – 10.04
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-<strong>\<0.001</strong>
-</td>
-</tr>
-<tr>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-small woody half meter<br>overhead
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-1.34
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-1.26 – 1.42
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-<strong>\<0.001</strong>
-</td>
-</tr>
-<tr>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-small woody cover more<br>than half meter overhead
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.42
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.40 – 0.46
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-<strong>\<0.001</strong>
-</td>
-</tr>
-<tr>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-large woody cover more<br>than half meter overhead
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.42
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.29 – 0.60
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-<strong>\<0.001</strong>
+<strong>0.017</strong>
 </td>
 </tr>
 <tr>
@@ -1276,10 +1701,24 @@ Zero-Inflated Model
 (Intercept)
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.05
+0.08
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.04 – 0.07
+0.06 – 0.10
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+<strong>\<0.001</strong>
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+percent small woody cover<br>inchannel
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.02
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.02 – 1.03
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
 <strong>\<0.001</strong>
@@ -1296,7 +1735,7 @@ depth
 0.99 – 1.00
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.588
+0.092
 </td>
 </tr>
 <tr>
@@ -1304,94 +1743,52 @@ depth
 velocity
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-1.05
+0.89
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.90 – 1.23
+0.74 – 1.06
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.501
+0.184
 </td>
 </tr>
 <tr>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-cobble substrate
+percent large woody cover<br>inchannel
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.03
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+1.01 – 1.05
+</td>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
+<strong>0.012</strong>
+</td>
+</tr>
+<tr>
+<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
+percent submerged aquatic<br>veg inchannel
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
 1.00
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.78 – 1.30
+0.99 – 1.00
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.973
+0.274
 </td>
 </tr>
 <tr>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-boulder substrate
+percent cover more than<br>half meter overhead
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-1.53
+1.01
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-1.03 – 2.27
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-<strong>0.034</strong>
-</td>
-</tr>
-<tr>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-small woody cover<br>inchannel
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-1.32
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.80 – 2.18
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.284
-</td>
-</tr>
-<tr>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-large woody cover<br>inchannel
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-1.96
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.65 – 5.90
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.232
-</td>
-</tr>
-<tr>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-submerged aquatic veg<br>inchannel
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.94
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.72 – 1.23
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.653
-</td>
-</tr>
-<tr>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-undercut bank
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-6.09
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-2.89 – 12.81
+1.01 – 1.02
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
 <strong>\<0.001</strong>
@@ -1399,72 +1796,44 @@ undercut bank
 </tr>
 <tr>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-half meter overhead
+percent cobble substrate
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.97
+1.00
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.62 – 1.51
+0.99 – 1.00
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.899
+0.311
 </td>
 </tr>
 <tr>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-cover more than half<br>meter overhead
+percent boulder substrate
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-1.54
+1.01
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.38 – 6.28
+1.00 – 1.02
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.550
+<strong>0.021</strong>
 </td>
 </tr>
 <tr>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-small woody half meter<br>overhead
+percent undercut bank
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-2.35
+1.08
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-1.41 – 3.89
+1.05 – 1.11
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-<strong>0.001</strong>
-</td>
-</tr>
-<tr>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-small woody cover more<br>than half meter overhead
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-1.05
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.58 – 1.89
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.868
-</td>
-</tr>
-<tr>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:left; ">
-large woody cover more<br>than half meter overhead
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-1.58
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.39 – 6.51
-</td>
-<td style=" padding:0.2cm; text-align:left; vertical-align:top; text-align:center;  ">
-0.523
+<strong>\<0.001</strong>
 </td>
 </tr>
 <tr>
@@ -1472,7 +1841,7 @@ large woody cover more<br>than half meter overhead
 Observations
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; padding-top:0.1cm; padding-bottom:0.1cm; text-align:left; border-top:1px solid;" colspan="3">
-4936
+4296
 </td>
 </tr>
 <tr>
@@ -1480,39 +1849,10 @@ Observations
 R<sup>2</sup> / R<sup>2</sup> adjusted
 </td>
 <td style=" padding:0.2cm; text-align:left; vertical-align:top; padding-top:0.1cm; padding-bottom:0.1cm; text-align:left;" colspan="3">
-0.904 / 0.904
+0.999 / 0.999
 </td>
 </tr>
 </table>
-
-``` r
-emmip(best_model_hurdle, small_woody_half_meter_overhead ~ boulder_substrate + large_woody_cover_inchannel + undercut_bank + cover_more_than_half_meter_overhead,
-      at = list(
-        small_woody_half_meter_overhead = 0:1, 
-        boulder_substrate = 1, 
-        large_woody_cover_inchannel = 1, 
-        undercut_bank = 1,
-        cover_more_than_half_meter_overhead = 1, 
-        no_cover_inchannel = 1
-      ),
-       lin.pred = FALSE, mode ="prob0", CIs = TRUE) +
-  ylab("Probability of zero")
-```
-
-    ## Suggestion: Add 'at = list(boulder_substratelarge_woody_cover_inchannelundercut_bankcover_more_than_half_meter_overhead = ...)' to call to see > 1 value per group.
-
-    ## `geom_line()`: Each group consists of only one observation.
-    ## ℹ Do you need to adjust the group aesthetic?
-
-![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
-
-``` r
-emmip(best_model_hurdle, undercut_bank ~  boulder_substrate + large_woody_cover_inchannel + small_woody_half_meter_overhead + cover_more_than_half_meter_overhead,
-       lin.pred = FALSE, mode ="prob0", CIs = TRUE) +
-  ylab("Probability of zero")
-```
-
-![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-18-2.png)<!-- -->
 
 ``` r
 knitr::knit_exit()

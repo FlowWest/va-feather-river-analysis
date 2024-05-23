@@ -569,7 +569,7 @@ plots
 
 ```
 
-## Hurdle Model
+## Hurdle Model - Binary Cover Values
 
 A hurdle model was used in Gard 2024 to test for the effects of cover
 and habitat type on the total abundance of Chinook salmon at both site
@@ -598,8 +598,21 @@ The count part of the model estimate the effects of predictor variables
 on the count outcome, excluding all zero counts. Coefficients of counts
 represent rate ratios of one or more fish observed.
 
-The Incidence Result Ratio (IRR) in the count part of the model (count > 0) represent the multiplicative effect of a one-unit change in a predictor variable on the expected count of non-zero observations, assuming all other variables are held constant. For example, if the IRR for a predictor is 1.2, it means that a one-unit increase in that predictor is associated with a 20% increase in the expected count of non-zero observations, assuming all other variables remain constant. For the binary part of the model -  if the coefficient for a predictor in the binary part of the hurdle model is 0.5, it means that a one-unit increase in the predictor is associated with a 50% increase in the odds of having a zero count versus a positive count, assuming all other variables are held constant.
+The Incidence Result Ratio (IRR) in the count part of the model (count
+\> 0) represent the multiplicative effect of a one-unit change in a
+predictor variable on the expected count of non-zero observations,
+assuming all other variables are held constant. For example, if the IRR
+for a predictor is 1.2, it means that a one-unit increase in that
+predictor is associated with a 20% increase in the expected count of
+non-zero observations, assuming all other variables remain constant. For
+the binary part of the model - if the coefficient for a predictor in the
+binary part of the hurdle model is 0.5, it means that a one-unit
+increase in the predictor is associated with a 50% increase in the odds
+of having a zero count versus a positive count, assuming all other
+variables are held constant.
 
+**Notes** For this hurdle model, chose to make all substrate and cover
+variables presence/absence based on a 20% threshold
 
 **Predictors**
 
@@ -616,56 +629,20 @@ The Incidence Result Ratio (IRR) in the count part of the model (count > 0) repr
 -   more than half meter overhead
 -   small woody half meter overhead
 -   small woody more than half meter overhead
-
-
-**Notes**
-- Currently using all cover variables as 0/1 if they meet a 20% threshold. Would like to explore other options. 
+-   velocity
+-   depth
 
 ```{r}
 # use a hurdle model (Gard 2024); 
 # pre-processing - all numeric values must be rounded to whole numbers
-
-# test <- mini_snorkel_model_ready |> 
-#   rowwise() |> 
-#   mutate(fine_substrate = percent_fine_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_fine_substrate", 'perc_total']$perc_total),
-#          sand_substrate = percent_sand_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_sand_substrate", 'perc_total']$perc_total),
-#          small_gravel = percent_small_gravel_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_small_gravel_substrate", 'perc_total']$perc_total),
-#          large_gravel = percent_large_gravel_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_large_gravel_substrate", 'perc_total']$perc_total),
-#          cobble_substrate = percent_cobble_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_cobble_substrate", 'perc_total']$perc_total),
-#          boulder_substrate = percent_boulder_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_boulder_substrate", 'perc_total']$perc_total)) |> 
-#   select(-c(percent_fine_substrate:percent_boulder_substrate)) |> 
-#   mutate(woody_debris = sum(percent_large_woody_cover_inchannel, percent_small_woody_cover_inchannel),
-#          overhead_cover = sum(percent_cover_half_meter_overhead, percent_cover_more_than_half_meter_overhead)
-#          ) |> 
-#   select(-c(percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_cover_more_than_half_meter_overhead, percent_cover_half_meter_overhead)) |> 
-#   select(-channel_geomorphic_unit, -micro_hab_data_tbl_id, -location_table_id, -fish_data_id,
-#          -focal_velocity, -dist_to_bottom, -fl_mm, -species,  -transect_code, -date, -surface_turbidity) |> 
-#   select(-(contains("no_cover"))) |> 
-#   distinct() |> 
-#   na.omit() |> 
-#   as_tibble() |> 
-#   select(-fish_presence) |> 
-#   mutate_all(~ round(., digits = 0))
-
-# hurdle_data <- mini_snorkel_model_ready |> 
-#    select(count, depth, velocity, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank") |> 
-#   # create new cover variables, based off Gard 2023
-#   mutate(small_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_small_woody_cover_inchannel,
-#          small_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_small_woody_cover_inchannel) |> 
-#   mutate(percent_cobble_substrate = percent_cobble_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_cobble_substrate", 'perc_total']$perc_total),
-#          percent_boulder_substrate = percent_boulder_substrate * (1-substrate_percent[substrate_percent$substrate_type == "percent_boulder_substrate", 'perc_total']$perc_total)) |> 
-#   select(-(contains("no_cover"))) |> 
-#   mutate_all(~ round(., digits = 0)) |> 
-#   na.omit() |> glimpse()
-
-hurdle_data <- mini_snorkel_model_ready |> 
-    select(count, depth, velocity, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank") |> 
+hurdle_data <- mini_snorkel_model_ready |>
+    select(count, depth, velocity, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank") |>
   # create new cover variables, based off Gard 2023
   mutate(small_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_small_woody_cover_inchannel,
          small_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_small_woody_cover_inchannel,
          large_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_large_woody_cover_inchannel,
-         large_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_large_woody_cover_inchannel) |> 
-  # transform to presence/absence based on a defined threshold 
+         large_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_large_woody_cover_inchannel) |>
+  # transform to presence/absence based on a defined threshold
   mutate(cobble_substrate = ifelse(percent_cobble_substrate >= percent_threshold, 1, 0 ),
          boulder_substrate = ifelse(percent_boulder_substrate >= percent_threshold, 1, 0 ),
          small_woody_cover_inchannel = ifelse(percent_small_woody_cover_inchannel >= percent_threshold, 1, 0 ),
@@ -674,37 +651,37 @@ hurdle_data <- mini_snorkel_model_ready |>
          undercut_bank = ifelse(percent_undercut_bank >= percent_threshold, 1, 0),
          no_cover_overhead = ifelse(percent_no_cover_overhead >= percent_threshold, 1, 0),
          half_meter_overhead = ifelse(percent_cover_half_meter_overhead >= percent_threshold, 1, 0),
-         cover_more_than_half_meter_overhead = ifelse(percent_cover_more_than_half_meter_overhead >= percent_threshold, 1, 0),      
-         no_cover_inchannel = ifelse(percent_no_cover_inchannel >= percent_threshold, 1, 0),      
+         cover_more_than_half_meter_overhead = ifelse(percent_cover_more_than_half_meter_overhead >= percent_threshold, 1, 0),
+         no_cover_inchannel = ifelse(percent_no_cover_inchannel >= percent_threshold, 1, 0),
          small_woody_half_meter_overhead = ifelse(small_woody_inchannel_and_half_meter_overhead >= percent_threshold, 1, 0),
          small_woody_cover_more_than_half_meter_overhead = ifelse(small_woody_inchannel_and_more_than_half_meter_overhead >= percent_threshold, 1, 0),
          large_woody_inchannel_and_half_meter_overhead = ifelse(large_woody_inchannel_and_more_than_half_meter_overhead >= percent_threshold, 1, 0),
-         large_woody_cover_more_than_half_meter_overhead = ifelse(large_woody_inchannel_and_more_than_half_meter_overhead >= percent_threshold, 1, 0)) |> 
-  select(count, depth, velocity, cobble_substrate:large_woody_cover_more_than_half_meter_overhead) |> 
+         large_woody_cover_more_than_half_meter_overhead = ifelse(large_woody_inchannel_and_more_than_half_meter_overhead >= percent_threshold, 1, 0)) |>
+  select(count, depth, velocity, cobble_substrate:large_woody_cover_more_than_half_meter_overhead) |>
   # remove no cover variables (no cover overhead, no cover in channel)
-  select(-contains("no_cover")) |> 
-  mutate_all(~ round(., digits = 0)) |> 
-  na.omit() |> 
+  select(-contains("no_cover")) |>
+  mutate_all(~ round(., digits = 0)) |>
+  na.omit() |>
   glimpse()
 
 
-hurdle_model <- pscl::hurdle(count ~ ., data = hurdle_data) 
+hurdle_model <- pscl::hurdle(count ~ small_woody_cover_inchannel + depth + velocity + large_woody_cover_inchannel + submerged_aquatic_veg_inchannel + cover_more_than_half_meter_overhead + half_meter_overhead + cobble_substrate + boulder_substrate + undercut_bank, data = hurdle_data, dist = "negbin") 
+# Negative Binomial Distribution: The Negative Binomial distribution is more flexible than the Poisson distribution and is used when the variance of the counts is greater than the mean, which is known as overdispersion. The Negative Binomial model allows for the variance to be larger than the mean, which is common in count data where there is extra variability beyond what is expected from a Poisson distribution.
+
 
 # zero inflated models are capable of dealing with excess zero counts
 # NOTE: Chose to not use a zero inflated model because it operates under the assumption that excess zeros are generated by a separate process from the count values. 
 # zeroinf_model <- pscl::zeroinfl(count ~ ., data = hurdle_data) # , zero.dist = "binomial", dist = "negbin"
-
-#summary(hurdle_model)
-#summary(zeroinf_model)
 
 best_model_hurdle <- MASS::stepAIC(hurdle_model, trace = TRUE)
 
 summary(best_model_hurdle)
 
 ```
+
 ### Results
 
-```{r}
+```{r echo=FALSE}
 # plot(factor(count == 0) ~ boulder_substrate + large_woody_cover_inchannel + undercut_bank + cover_more_than_half_meter_overhead + small_woody_half_meter_overhead, data = hurdle_data, main = "Zero")
 # plot(log(count) ~ boulder_substrate + large_woody_cover_inchannel + undercut_bank + cover_more_than_half_meter_overhead + small_woody_half_meter_overhead, data = hurdle_data, subset = count > 0,
 #   main = "Count")
@@ -714,21 +691,91 @@ library(emmeans)
 
 tab_model(best_model_hurdle)
 
-emmip(best_model_hurdle, small_woody_half_meter_overhead ~ boulder_substrate + large_woody_cover_inchannel + undercut_bank + cover_more_than_half_meter_overhead,
-      at = list(
-        small_woody_half_meter_overhead = 0:1, 
-        boulder_substrate = 1, 
-        large_woody_cover_inchannel = 1, 
-        undercut_bank = 1,
-        cover_more_than_half_meter_overhead = 1, 
-        no_cover_inchannel = 1
-      ),
-       lin.pred = FALSE, mode ="prob0", CIs = TRUE) +
-  ylab("Probability of zero")
+# emmip(best_model_hurdle, small_woody_half_meter_overhead ~ boulder_substrate + large_woody_cover_inchannel + undercut_bank + cover_more_than_half_meter_overhead,
+#       at = list(
+#         small_woody_half_meter_overhead = 0:1, 
+#         boulder_substrate = 1, 
+#         large_woody_cover_inchannel = 1, 
+#         undercut_bank = 1,
+#         cover_more_than_half_meter_overhead = 1, 
+#         no_cover_inchannel = 1
+#       ),
+#        lin.pred = FALSE, mode ="prob0", CIs = TRUE) +
+#   ylab("Probability of zero")
+# 
+# emmip(best_model_hurdle, undercut_bank ~  boulder_substrate + large_woody_cover_inchannel + small_woody_half_meter_overhead + cover_more_than_half_meter_overhead,
+#        lin.pred = FALSE, mode ="prob0", CIs = TRUE) +
+#   ylab("Probability of zero")
 
-emmip(best_model_hurdle, undercut_bank ~  boulder_substrate + large_woody_cover_inchannel + small_woody_half_meter_overhead + cover_more_than_half_meter_overhead,
-       lin.pred = FALSE, mode ="prob0", CIs = TRUE) +
-  ylab("Probability of zero")
+# emmip(best_model_hurdle, percent_undercut_bank ~  percent_boulder_substrate,
+#        lin.pred = FALSE, mode ="prob0", CIs = TRUE) +
+#   ylab("Probability of zero")
+
+```
+
+## Hurdle Model - with values
+
+This hurdle model uses substrate and cover percent values.
+
+**Predictors**
+
+-   depth
+
+-   velocity
+
+-   percent large woody cover in channel
+
+-   percent small woody cover in channel
+
+-   percent cover half meter overhead
+
+-   percent cover more than half meter overhead
+
+-   percent cobble
+
+-   percent boulder
+
+-   percent undercut bank
+
+**Notes** \*
+
+-   removed combined cover variables (small and large woody in channel
+    with cover overhead) because of issues with collinearity within the
+    hurdle model
+
+```{r}
+
+# use a hurdle model (Gard 2024); 
+# pre-processing - all numeric values must be rounded to whole numbers
+
+# WIP
+hurdle_data <- mini_snorkel_model_ready |>
+    select(count, depth, velocity, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank") |>
+  # create new cover variables, based off Gard 2023
+  mutate(small_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_small_woody_cover_inchannel,
+         small_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_small_woody_cover_inchannel,
+         large_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_large_woody_cover_inchannel,
+         large_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_large_woody_cover_inchannel) |>
+  # remove no cover variables (no cover overhead, no cover in channel)
+  select(-contains("no_cover")) |>
+  #mutate_all(~ round(., digits = 0)) |>
+  na.omit() |>
+  distinct() |>
+  glimpse()
+
+hurdle_model <- pscl::hurdle(count ~ percent_small_woody_cover_inchannel + depth + velocity + percent_large_woody_cover_inchannel + percent_submerged_aquatic_veg_inchannel + percent_cover_more_than_half_meter_overhead + percent_cover_half_meter_overhead + percent_cobble_substrate + percent_boulder_substrate + percent_undercut_bank, data = hurdle_data, dist = "negbin") 
+# Negative Binomial Distribution: The Negative Binomial distribution is more flexible than the Poisson distribution and is used when the variance of the counts is greater than the mean, which is known as overdispersion. The Negative Binomial model allows for the variance to be larger than the mean, which is common in count data where there is extra variability beyond what is expected from a Poisson distribution.
+
+best_model_hurdle <- MASS::stepAIC(hurdle_model, trace = TRUE)
+
+summary(best_model_hurdle)
+
+```
+
+### Results
+
+```{r}
+tab_model(best_model_hurdle)
 
 ```
 
