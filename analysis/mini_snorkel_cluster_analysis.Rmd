@@ -26,8 +26,8 @@ combined_snorkel <- read_csv(here::here("data-raw", "combined_feather_snorkel_da
 # mini snorkel data
 # TODO is there a table that associates the microhabitat plot with a lat/long?
 # TODO the survey locations are missing coordinates
-mini_snorkel_raw <- read_csv(here::here("data-raw", "microhabitat_with_fish_observations.csv"))
-location_raw <- read_csv(here::here("data-raw", "survey_locations.csv"))
+mini_snorkel_raw <- read_csv(here::here("data", "microhabitat_with_fish_observations.csv"))
+location_raw <- read_csv(here::here("data", "survey_locations.csv"))
 ```
 
 # Mini Snorkel
@@ -442,6 +442,83 @@ None of the percent cover substrate variables are correlated.
 
 ```{r, echo = F}
 pairs.panels(mini_percent_substrate)
+```
+
+
+## Summary plots
+
+Compare variables for presence and absence
+
+- Seems like the biggest differences are for the percent no cover inchannel. This might be the best way to handle cover. We may not be able to get more specific than this.
+
+```{r}
+mini_snorkel_presence_absence <- mini_snorkel_raw |> 
+  mutate(count = ifelse(is.na(count), 0, count),
+         presence_absence = ifelse(count > 0, "present", "absent")) |> 
+  filter(month(date) == 3)
+
+mini_snorkel_presence_absence |> 
+  group_by(presence_absence) |> 
+  tally() |> 
+  ggplot(aes(x = presence_absence, y = n)) +
+  geom_col()
+
+mini_snorkel_presence_absence |> 
+  ggplot(aes(y = count)) +
+  geom_histogram()
+
+# not a big difference in depth (more diff when filter to march)
+mini_snorkel_presence_absence |> 
+  ggplot(aes(x = presence_absence, y = depth)) +
+  geom_boxplot()
+# a little difference in velocity but not much (less diff when filter to march)
+mini_snorkel_presence_absence |> 
+  ggplot(aes(x = presence_absence, y = velocity)) +
+  geom_boxplot()
+# a little difference in surface turbidity
+mini_snorkel_presence_absence |> 
+  ggplot(aes(x = presence_absence, y = surface_turbidity)) +
+  geom_boxplot()
+# no difference for percent cobble (when filter to march actually higher for absent)
+mini_snorkel_presence_absence |> 
+  ggplot(aes(x = presence_absence, y = percent_cobble_substrate)) +
+  geom_boxplot()
+# no difference for percent boulder
+mini_snorkel_presence_absence |> 
+  ggplot(aes(x = presence_absence, y = percent_boulder_substrate)) +
+  geom_boxplot()
+# some difference for small woody
+mini_snorkel_presence_absence |> 
+  ggplot(aes(x = presence_absence, y = percent_small_woody_cover_inchannel)) +
+  geom_boxplot()
+# no difference large woody
+mini_snorkel_presence_absence |> 
+  ggplot(aes(x = presence_absence, y = percent_large_woody_cover_inchannel)) +
+  geom_boxplot()
+# small diff aquatic (no diff when filter to march)
+mini_snorkel_presence_absence |> 
+  ggplot(aes(x = presence_absence, y = percent_submerged_aquatic_veg_inchannel)) +
+  geom_boxplot()
+# no diff in undercut
+mini_snorkel_presence_absence |> 
+  ggplot(aes(x = presence_absence, y = percent_undercut_bank)) +
+  geom_boxplot()
+# small diff in percnet no inchannel
+mini_snorkel_presence_absence |> 
+  ggplot(aes(x = presence_absence, y = percent_no_cover_inchannel)) +
+  geom_boxplot()
+# small difff in percent no overhead
+mini_snorkel_presence_absence |> 
+  ggplot(aes(x = presence_absence, y = percent_no_cover_overhead)) +
+  geom_boxplot()
+# small diff for half overhead
+mini_snorkel_presence_absence |> 
+  ggplot(aes(x = presence_absence, y = percent_cover_half_meter_overhead)) +
+  geom_boxplot()
+# small diff more than half overhead
+mini_snorkel_presence_absence |> 
+  ggplot(aes(x = presence_absence, y = percent_cover_more_than_half_meter_overhead)) +
+  geom_boxplot()
 ```
 
 ## Cluster analysis
@@ -1031,6 +1108,8 @@ substrate_cluster_data_post <- mini_snorkel_raw |>
 
 This analysis results in 5 clusters with pretty clear distinctions: majority large gravel, majority sand, majority small gravel, cobble/boulder/large gravel, majority fine. 
 
+I tried this with all data instead of just fish observations and found similar results.
+
 I looked at summaries of cover for these same cluster groups and didn't find anything - most groups had similar breakdowns of cover. Substrate is more related to depth and velocity.
 
 We should probably leave out substrate or include a group that classifies as cobble/boulder/large gravel.
@@ -1092,108 +1171,7 @@ substrate_cluster_data_post |>
        y = "")
 ```
 
-#### all data substrate cluster
 
-```{r, include = F}
-
-all_substrate_cluster_data <- mini_snorkel_raw |> 
-  #filter(count > 0, fl_mm < 100) |> # filter to only include fish observations. i think makes the most sense because we are asking are there clusters of habitat characteristics that fish use. Also filtered to juvenile fish (about 11 fish that are adult size)
-  select(percent_fine_substrate, 
-         percent_sand_substrate, 
-         percent_small_gravel_substrate,
-         percent_large_gravel_substrate,
-         percent_cobble_substrate,
-         percent_boulder_substrate)
-
-substrate_clusters <- hclust(dist(all_substrate_cluster_data), method = "ward.D2")
-# Dendrogram plot (need to make a prettier one)
-```
-
-**Dendrogram of clusters**
-
-The dendrogram visualizes the connections between datapoints. Need to clean this plot up.
-
-```{r, echo = F}
-plot(substrate_clusters)
-```
-
-**Scree plot**
-
-The elbow of the scree plot visualizes the ideal number of clusters.
-
-```{r, echo = F}
-scree <- function(hclust.obj, max.size = 12) {
-temp <- with(hclust.obj, cbind(height, merge))
-colnames(temp) <- c("Height", "JoinsThis", "WithThis")
-plot(x = max.size:1,
-     y = temp[(nrow(temp)-( max.size -1)):nrow(temp), 1],
-     xlab = "Number of groups", ylab = "Height",
-     main = hclust.obj $call, type = "b")
-tail(temp, max.size)
-}
-scree(hclust.obj = substrate_clusters)
-```
-
-
-```{r, include = F}
-# Assign clusters
-
-# Function to cut tree into the selected number of clusters
-cluster_groups <- cutree(substrate_clusters, k = 6)
-table(cluster_groups)
-
-# add cluster assignments to the data so we can summarize
-substrate_cluster_assign <- all_substrate_cluster_data |> 
-  cbind(cluster_groups) |> 
-  mutate(cluster_groups = factor(cluster_groups))
-```
-
-There very clear differences in percent of small gravel, large gravel, and cobble between groups. There are smaller differences in percent boulder.
-
-```{r, echo = F}
-substrate_cluster_assign |> 
-  pivot_longer(cols = percent_fine_substrate:percent_boulder_substrate, names_to = "parameter", values_to = "value") |> 
-  ggplot(aes(x = cluster_groups, y = value)) +
-  geom_boxplot() +
-  facet_wrap(~parameter, scales ="free_y") +
-  theme_bw() +
-  labs(x = "",
-       y = "")
-
-#ggsave("analysis/figures/substrate_boxplot.png", height = 7, width = 9)
-
-substrate_cluster_assign |> 
-  pivot_longer(cols = percent_fine_substrate:percent_boulder_substrate, names_to = "parameter", values_to = "value") |> 
-  ggplot(aes(x = cluster_groups, y = value, fill = parameter)) +
-  geom_col() +
-  theme_bw() +
-  labs(x = "",
-       y = "")
-
-substrate_cluster_assign |> 
-  pivot_longer(cols = percent_fine_substrate:percent_boulder_substrate, names_to = "parameter", values_to = "value") |> 
-  group_by(cluster_groups, parameter) |> 
-  summarize(mean = mean(value),
-            median = median(value)) |> 
-  ggplot(aes(x = cluster_groups, y = mean, fill = parameter)) +
-  geom_col() +
-  theme_bw() +
-  labs(x = "",
-       y = "")
-
-# cluster_assign |> 
-#   ggplot(aes(x = cluster_groups, y = percent_small_gravel_substrate)) +
-#   geom_boxplot()
-# cluster_assign |> 
-#   ggplot(aes(x = cluster_groups, y = percent_large_gravel_substrate)) +
-#   geom_boxplot()
-# cluster_assign |> 
-#   ggplot(aes(x = cluster_groups, y = percent_cobble_substrate)) +
-#   geom_boxplot()
-# cluster_assign |> 
-#   ggplot(aes(x = cluster_groups, y = percent_boulder_substrate)) +
-#   geom_boxplot()
-```
 
 # Intermediate Snorkel
 
