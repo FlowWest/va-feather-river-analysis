@@ -1,7 +1,7 @@
 Mini Snorkel Feather HSC Using Logistic Regression
 ================
 Maddee Rubenson
-2024-05-23
+2024-07-01
 
 - [Objective](#objective)
 - [Pre-process data](#pre-process-data)
@@ -538,7 +538,8 @@ predictions |>
          y = 'Probability of Fish Presence')
 ```
 
-    ## Warning: Removed 82 rows containing non-finite values (`stat_boxplot()`).
+    ## Warning: Removed 82 rows containing non-finite outside the scale range
+    ## (`stat_boxplot()`).
 
 ![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
@@ -550,7 +551,8 @@ predictions |>
          y = 'Probability of Fish Presence')
 ```
 
-    ## Warning: Removed 82 rows containing non-finite values (`stat_boxplot()`).
+    ## Warning: Removed 82 rows containing non-finite outside the scale range
+    ## (`stat_boxplot()`).
 
 ![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-13-2.png)<!-- -->
 
@@ -562,7 +564,8 @@ predictions |>
          y = 'Probability of Fish Presence')
 ```
 
-    ## Warning: Removed 82 rows containing non-finite values (`stat_boxplot()`).
+    ## Warning: Removed 82 rows containing non-finite outside the scale range
+    ## (`stat_boxplot()`).
 
 ![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-13-3.png)<!-- -->
 
@@ -574,7 +577,8 @@ predictions |>
          y = 'Probability of Fish Presence')
 ```
 
-    ## Warning: Removed 82 rows containing non-finite values (`stat_boxplot()`).
+    ## Warning: Removed 82 rows containing non-finite outside the scale range
+    ## (`stat_boxplot()`).
 
 ![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-13-4.png)<!-- -->
 
@@ -586,7 +590,8 @@ predictions |>
          y = 'Probability of Fish Presence')
 ```
 
-    ## Warning: Removed 82 rows containing non-finite values (`stat_boxplot()`).
+    ## Warning: Removed 82 rows containing non-finite outside the scale range
+    ## (`stat_boxplot()`).
 
 ![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-13-5.png)<!-- -->
 
@@ -598,7 +603,8 @@ predictions |>
          y = 'Probability of Fish Presence')
 ```
 
-    ## Warning: Removed 82 rows containing non-finite values (`stat_boxplot()`).
+    ## Warning: Removed 82 rows containing non-finite outside the scale range
+    ## (`stat_boxplot()`).
 
 ![](feather_river_hsi_logistic_regression_files/figure-gfm/unnamed-chunk-13-6.png)<!-- -->
 
@@ -973,7 +979,7 @@ summary(best_model_hurdle)
 
 ### Results
 
-    ## Learn more about sjPlot with 'browseVignettes("sjPlot")'.
+    ## Install package "strengejacke" from GitHub (`devtools::install_github("strengejacke/strengejacke")`) to load all sj-packages at once!
 
 <table style="border-collapse:collapse; border:none;">
 <tr>

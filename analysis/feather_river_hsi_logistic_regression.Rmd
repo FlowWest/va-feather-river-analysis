@@ -48,7 +48,11 @@ uses cover, substrate, depth and velocity.
 
 ```{r}
 # read in mini snorkel data
-mini_snorkel_model_ready <- read_csv(here::here('data-raw', 'microhabitat_with_fish_observations.csv')) |> 
+# TODO: this will get updated to read from EDI when the data package is published
+micro_hab <- read_csv(here::here('data-raw', 'microhabitat_observations.csv'))
+locations <- read_csv(here::here('data-raw', 'survey_locations.csv'))
+
+mini_snorkel_model_ready <- micro_hab |> left_join(locations) |> 
   mutate(count = ifelse(is.na(count), 0, count),
         fish_presence = as.factor(ifelse(count < 1, "0", "1"))) |> 
   glimpse()
@@ -682,10 +686,6 @@ summary(best_model_hurdle)
 ### Results
 
 ```{r echo=FALSE}
-# plot(factor(count == 0) ~ boulder_substrate + large_woody_cover_inchannel + undercut_bank + cover_more_than_half_meter_overhead + small_woody_half_meter_overhead, data = hurdle_data, main = "Zero")
-# plot(log(count) ~ boulder_substrate + large_woody_cover_inchannel + undercut_bank + cover_more_than_half_meter_overhead + small_woody_half_meter_overhead, data = hurdle_data, subset = count > 0,
-#   main = "Count")
-
 library(sjPlot)
 library(emmeans)
 
