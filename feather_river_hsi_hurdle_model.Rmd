@@ -46,17 +46,59 @@ options(scipen=999)
 Using the mini snorkel data for the Feather River, produce an HSC that
 uses cover, substrate, depth and velocity.
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 # read in mini snorkel data
 # TODO: this will get updated to read from EDI when the data package is published
 micro_hab <- read_csv(here::here('data-raw', 'microhabitat_observations.csv'))
 locations <- read_csv(here::here('data-raw', 'survey_locations.csv'))
 
-mini_snorkel_model_ready <- micro_hab |> left_join(locations) |> 
+mini_snorkel_raw <- micro_hab |> left_join(locations) |> 
   mutate(count = ifelse(is.na(count), 0, count),
         fish_presence = as.factor(ifelse(count < 1, "0", "1"))) |> 
   glimpse()
 
+```
+
+## Data Exploration 
+
+### Outliers 
+
+* There are two outliers, one in the high flow and one in the low flow channel 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Are the outliers in high flow or low flow channel?
+mini_snorkel_raw |> 
+  ggplot() + 
+  geom_point(aes(x = channel_location, y = count))
+
+mini_snorkel_raw |> 
+  filter(count > 0) |> 
+  ggplot() + 
+  geom_histogram(aes(count))
+
+# remove two outliers 
+mini_snorkel_model_ready <- mini_snorkel_raw 
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# looking at overall count data between the low flow/high flow channels
+mini_snorkel_model_ready |> 
+  group_by(channel_location) |> 
+  tally(count) |> 
+  knitr::kable(caption = "Table 1. Total count of fish between high flow and low flow channels")
+
+# This figure shows how there are more fish present in the high flow channel 
+# for less time. The fish stick around for much longer in the low flow channel. 
+mini_snorkel_model_ready |> 
+  group_by(channel_location, month = lubridate::month(date)) |> 
+  tally(count) |> 
+  ggplot() + 
+  geom_col(aes(x = as.factor(month), y = n, fill = channel_location), position = "dodge") + 
+  ylab("fish count") +
+  xlab("month") +
+  ggtitle('Figure 1. Fish presence as a functon of month and high flow/low flow channel')
+  
 ```
 
 # Hurdle Models and Interpretation
@@ -123,8 +165,9 @@ variables presence/absence based on a 20% threshold
 -   small woody more than half meter overhead
 -   velocity
 -   depth
+-   channel_location (high flow, low flow)
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 percent_threshold <- 20
 
 # use a hurdle model (Gard 2024); 
@@ -178,7 +221,9 @@ summary(best_model_hurdle)
 ```{r echo=FALSE}
 library(sjPlot)
 
-tab_model(best_model_hurdle)
+# tab_model(best_model_hurdle)
+
+plot_model(best_model_hurdle, title = "Hurdle Model Results Using Binary Presence/Absence for Cover and Substrate")
 
 ```
 
@@ -206,13 +251,15 @@ This hurdle model uses substrate and cover percent values.
 
 -   percent undercut bank
 
+-   channel_location (high flow, low flow)
+
 **Notes** \*
 
 -   removed combined cover variables (small and large woody in channel
     with cover overhead) because of issues with collinearity within the
     hurdle model
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 
 # use a hurdle model (Gard 2024); 
 # pre-processing - all numeric values must be rounded to whole numbers
@@ -242,8 +289,10 @@ summary(best_model_hurdle)
 
 ### Results
 
-```{r}
-tab_model(best_model_hurdle)
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# tab_model(best_model_hurdle)
+
+plot_model(best_model_hurdle, title = "Hurdle Model Results Using Absolute Values")
 
 ```
 
@@ -253,10 +302,5 @@ knitr::knit_exit()
 
 ## Next steps
 
-1.  Compare to species presence/absence
-2.  Look into methods for creating a more even sample of fish
-    presence/absence that does not create a synthetic dataset
-3.  Continue exploring methods for normalization and tuning parameters
-    and adding interactions between parameters
-4.  Explore using a fixed effect - such as geomorphic unit (pool, glide,
+1.  Explore using a fixed effect - such as geomorphic unit (pool, glide,
     riffle) or river mile
