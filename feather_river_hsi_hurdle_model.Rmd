@@ -1,5 +1,5 @@
 ---
-title: "Mini Snorkel Feather HSC Using Hurdle Model"
+title: "Mini Snorkel Feather Presence/Absence Model"
 author: "Maddee Rubenson"
 date: "`r Sys.Date()`"
 output: 
@@ -25,17 +25,23 @@ editor_options:
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(tidymodels)
+library(sjPlot)
 
 knitr::opts_chunk$set(echo = TRUE)
 
 theme_set(
   theme_minimal() +
   theme(
-    plot.title = element_text(size = 16, face = "bold"),  
-    axis.title.x = element_text(size = 14),  
-    axis.title.y = element_text(size = 14)   
+    plot.title = element_text(size = 11, face = "bold"),
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14)
   )
 )
+
+
+custom_colors <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+
 options(scipen=999)
 
 
@@ -43,67 +49,17 @@ options(scipen=999)
 
 ## Objective
 
-Using the mini snorkel data for the Feather River, produce an HSC that
-uses cover, substrate, depth and velocity.
+Develop a model that reflects the significance of cover, substrate,
+depth, and velocity on fish presence and absence.
 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
-# read in mini snorkel data
-# TODO: this will get updated to read from EDI when the data package is published
-micro_hab <- read_csv(here::here('data-raw', 'microhabitat_observations.csv'))
-locations <- read_csv(here::here('data-raw', 'survey_locations.csv'))
+## Methodology
 
-mini_snorkel_raw <- micro_hab |> left_join(locations) |> 
-  mutate(count = ifelse(is.na(count), 0, count),
-        fish_presence = as.factor(ifelse(count < 1, "0", "1"))) |> 
-  glimpse()
+Model was developed using [Feather River Mini Snorkel
+Data](https://github.com/FlowWest/feather-mini-snorkel). The data is structured with a numeric fish count variable that can be converted to a binary presence/absence. Logistic regression models were tested using the presence/absence as the response and cover, substrate, depth and velocity as the explanatory variables. However, due to the skewness of absence values, none of the developed models were well fit to the data. Based on a Gard 2024 paper (in-review), we decided to explore the use of hurdle models. Hurdle models excel with data types that are heavily skewed towards absence. 
 
-```
+### Hurdle Models and Interpretation
 
-## Data Exploration 
-
-### Outliers 
-
-* There are two outliers, one in the high flow and one in the low flow channel 
-
-```{r echo=FALSE, message=FALSE, warning=FALSE}
-# Are the outliers in high flow or low flow channel?
-mini_snorkel_raw |> 
-  ggplot() + 
-  geom_point(aes(x = channel_location, y = count))
-
-mini_snorkel_raw |> 
-  filter(count > 0) |> 
-  ggplot() + 
-  geom_histogram(aes(count))
-
-# remove two outliers 
-mini_snorkel_model_ready <- mini_snorkel_raw 
-```
-
-```{r echo=FALSE, message=FALSE, warning=FALSE}
-
-# looking at overall count data between the low flow/high flow channels
-mini_snorkel_model_ready |> 
-  group_by(channel_location) |> 
-  tally(count) |> 
-  knitr::kable(caption = "Table 1. Total count of fish between high flow and low flow channels")
-
-# This figure shows how there are more fish present in the high flow channel 
-# for less time. The fish stick around for much longer in the low flow channel. 
-mini_snorkel_model_ready |> 
-  group_by(channel_location, month = lubridate::month(date)) |> 
-  tally(count) |> 
-  ggplot() + 
-  geom_col(aes(x = as.factor(month), y = n, fill = channel_location), position = "dodge") + 
-  ylab("fish count") +
-  xlab("month") +
-  ggtitle('Figure 1. Fish presence as a functon of month and high flow/low flow channel')
-  
-```
-
-# Hurdle Models and Interpretation
-
-A hurdle model was used in Gard 2024 to test for the effects of cover
+A hurdle model was used in Gard 2024 (in-review) to test for the effects of cover
 and habitat type on the total abundance of Chinook salmon at both site
 and cell level. Here we use the hurdle model to help understand the
 influence of velocity, depth, and cover on fish count and
@@ -143,10 +99,80 @@ increase in the predictor is associated with a 50% increase in the odds
 of having a zero count versus a positive count, assuming all other
 variables are held constant.
 
-## Binary Cover Values
+## Build Models
 
-**Notes** For this hurdle model, chose to make all substrate and cover
+### Read in data 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# read in mini snorkel data
+# TODO: this will get updated to read from EDI when the data package is published
+micro_hab <- read_csv(here::here('data-raw', 'microhabitat_observations.csv'))
+locations <- read_csv(here::here('data-raw', 'survey_locations.csv'))
+
+mini_snorkel_raw <- micro_hab |> left_join(locations) |> 
+  mutate(count = ifelse(is.na(count), 0, count),
+        fish_presence = as.factor(ifelse(count < 1, "0", "1"))) |> 
+  glimpse()
+
+```
+
+### Review Data 
+
+#### Outliers
+
+There are two `count` outliers, one in the high flow and one in the low flow channel (figure 1), however their removal did not impact the model results so they were kept in the dataset. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Are the outliers in high flow or low flow channel?
+# mini_snorkel_raw |> 
+#   ggplot() + 
+#   geom_point(aes(x = channel_location, y = count))
+
+mini_snorkel_raw |> 
+  filter(count > 0) |> 
+  ggplot() + 
+  geom_histogram(aes(count, fill = channel_location), alpha = 0.6) + 
+  scale_fill_manual(values = custom_colors) + 
+  ylab("fish count") +
+  ggtitle('Figure 1. Histogram of fish count in the high and low flow channels') 
+
+mini_snorkel_model_ready <- mini_snorkel_raw 
+```
+
+### High Flow vs. Low Flow Channel 
+
+Table 1 and figure 2 explore whether fish presence was impacted by the high or low flow channels. Overall, the cumulative number of fish are similar across the high and low flow channels (table 1) however there are more fish present in the high flow channel for less time and the fish remain in the low flow channel for much longer (figure 2).
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# looking at overall count data between the low flow/high flow channels
+mini_snorkel_model_ready |> 
+  group_by(channel_location) |> 
+  tally(count) |> 
+  knitr::kable(caption = "Table 1. Total count of fish between high flow and low flow channels")
+
+# This figure shows how there are more fish present in the high flow channel 
+# for less time. The fish stick around for much longer in the low flow channel. 
+mini_snorkel_model_ready |> 
+  group_by(channel_location, month = lubridate::month(date)) |> 
+  tally(count) |> 
+  ggplot() + 
+  geom_col(aes(x = as.factor(month), y = n, fill = channel_location), position = "dodge") + 
+  ylab("fish count") +
+  xlab("month") +
+  ggtitle('Figure 2. Fish presence as a functon of month and high flow/low flow channel') + 
+  scale_fill_manual(values = custom_colors)
+  
+```
+
+## Model 1 - Binary Cover Values
+
+**Notes** 
+
+For this hurdle model, all substrate and cover
 variables presence/absence based on a 20% threshold
+
+TODO: add no_cover into variables
 
 **Predictors**
 
@@ -211,25 +237,23 @@ hurdle_model <- pscl::hurdle(count ~ small_woody_cover_inchannel + depth + veloc
 # zeroinf_model <- pscl::zeroinfl(count ~ ., data = hurdle_data) # , zero.dist = "binomial", dist = "negbin"
 
 best_model_hurdle <- MASS::stepAIC(hurdle_model, trace = TRUE)
+```
+
+### Model 1 Results
+
+```{r echo=FALSE}
+# tab_model(best_model_hurdle)
 
 summary(best_model_hurdle)
 
-```
-
-### Results
-
-```{r echo=FALSE}
-library(sjPlot)
-
-# tab_model(best_model_hurdle)
-
-plot_model(best_model_hurdle, title = "Hurdle Model Results Using Binary Presence/Absence for Cover and Substrate")
+plot_model(best_model_hurdle, title = "Figure 3. Hurdle Model Results Using Binary Presence/Absence for Cover and Substrate",  wrap.title = 50) + 
+  scale_color_manual(values = custom_colors[5:6])
 
 ```
 
-## Using Absolute Values
+## Model 2 - Using Absolute Values
 
-This hurdle model uses substrate and cover percent values.
+This hurdle model uses substrate and cover absolute percent values.
 
 **Predictors**
 
@@ -282,19 +306,31 @@ hurdle_model <- pscl::hurdle(count ~ percent_small_woody_cover_inchannel + depth
 # Negative Binomial Distribution: The Negative Binomial distribution is more flexible than the Poisson distribution and is used when the variance of the counts is greater than the mean, which is known as overdispersion. The Negative Binomial model allows for the variance to be larger than the mean, which is common in count data where there is extra variability beyond what is expected from a Poisson distribution.
 
 best_model_hurdle <- MASS::stepAIC(hurdle_model, trace = TRUE)
-
-summary(best_model_hurdle)
-
 ```
 
-### Results
+### Model 2 Results
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 # tab_model(best_model_hurdle)
 
-plot_model(best_model_hurdle, title = "Hurdle Model Results Using Absolute Values")
+summary(best_model_hurdle)
+
+
+plot_model(best_model_hurdle, title = "Figure 4. Hurdle Model Results Using Absolute Explanatory Variable Values", wrap.title = 50) + 
+    scale_color_manual(values = custom_colors[5:6])
+
 
 ```
+
+## Discussion 
+
+### Interpretation of Model 1
+
+### Interpretation of Model 2
+
+### Suggestions
+
+### Limitations 
 
 ```{r}
 knitr::knit_exit()

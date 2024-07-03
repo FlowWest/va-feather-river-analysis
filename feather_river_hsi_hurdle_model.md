@@ -1,21 +1,89 @@
-Mini Snorkel Feather HSC Using Hurdle Model
+Mini Snorkel Feather Presence/Absence Model
 ================
 Maddee Rubenson
-2024-07-02
+2024-07-03
 
 - [Objective](#objective)
-- [Data Exploration](#data-exploration)
-  - [Outliers](#outliers)
-- [Hurdle Models and Interpretation](#hurdle-models-and-interpretation)
-  - [Binary Cover Values](#binary-cover-values)
-    - [Results](#results)
-  - [Using Absolute Values](#using-absolute-values)
-    - [Results](#results-1)
+- [Methodology](#methodology)
+  - [Hurdle Models and
+    Interpretation](#hurdle-models-and-interpretation)
+- [Build Models](#build-models)
+  - [Read in data](#read-in-data)
+  - [Review Data](#review-data)
+  - [High Flow vs. Low Flow Channel](#high-flow-vs-low-flow-channel)
+- [Model 1 - Binary Cover Values](#model-1---binary-cover-values)
+  - [Model 1 Results](#model-1-results)
+- [Model 2 - Using Absolute Values](#model-2---using-absolute-values)
+  - [Model 2 Results](#model-2-results)
+- [Discussion](#discussion)
+  - [Interpretation of Model 1](#interpretation-of-model-1)
+  - [Interpretation of Model 2](#interpretation-of-model-2)
+  - [Suggestions](#suggestions)
+  - [Limitations](#limitations)
 
 ## Objective
 
-Using the mini snorkel data for the Feather River, produce an HSC that
-uses cover, substrate, depth and velocity.
+Develop a model that reflects the significance of cover, substrate,
+depth, and velocity on fish presence and absence.
+
+## Methodology
+
+Model was developed using [Feather River Mini Snorkel
+Data](https://github.com/FlowWest/feather-mini-snorkel). The data is
+structured with a numeric fish count variable that can be converted to a
+binary presence/absence. Logistic regression models were tested using
+the presence/absence as the response and cover, substrate, depth and
+velocity as the explanatory variables. However, due to the skewness of
+absence values, none of the developed models were well fit to the data.
+Based on a Gard 2024 paper (in-review), we decided to explore the use of
+hurdle models. Hurdle models excel with data types that are heavily
+skewed towards absence.
+
+### Hurdle Models and Interpretation
+
+A hurdle model was used in Gard 2024 (in-review) to test for the effects
+of cover and habitat type on the total abundance of Chinook salmon at
+both site and cell level. Here we use the hurdle model to help
+understand the influence of velocity, depth, and cover on fish count and
+presence/absence.
+
+**Hurdle Models**
+
+Hurdle models are used when count data has an excess of zeros. These
+models can be understood as a mixture of two subset of populations. In
+one subset, we have a usual count model that may or may not generate
+zero, and the other subset only produce zero count.
+
+A hurdle model models excess zeroes separately from the rest of the
+data. The zero counts are modeled as a binary response variable and the
+positive counts are modeled using poisson distribution.
+
+*Interpreting a Hurdle Model*
+
+The binary part of the model helps identify factors that influence the
+presence/absence of fish. The coefficients of the zero part of the
+hurdle model represent the odds ratio of observing at least one fish.
+
+The count part of the model estimate the effects of predictor variables
+on the count outcome, excluding all zero counts. Coefficients of counts
+represent rate ratios of one or more fish observed.
+
+The Incidence Result Ratio (IRR) in the count part of the model (count
+\> 0) represent the multiplicative effect of a one-unit change in a
+predictor variable on the expected count of non-zero observations,
+assuming all other variables are held constant. For example, if the IRR
+for a predictor is 1.2, it means that a one-unit increase in that
+predictor is associated with a 20% increase in the expected count of
+non-zero observations, assuming all other variables remain constant. For
+the binary part of the model - if the coefficient for a predictor in the
+binary part of the hurdle model is 0.5, it means that a one-unit
+increase in the predictor is associated with a 50% increase in the odds
+of having a zero count versus a positive count, assuming all other
+variables are held constant.
+
+## Build Models
+
+### Read in data
 
     ## Rows: 5,029
     ## Columns: 43
@@ -63,14 +131,23 @@ uses cover, substrate, depth and velocity.
     ## $ longitude                                   <dbl> -121.5588, -121.5588, -121…
     ## $ fish_presence                               <fct> 1, 1, 1, 0, 0, 0, 1, 0, 0,…
 
-## Data Exploration
+### Review Data
 
-### Outliers
+#### Outliers
 
-- There are two outliers, one in the high flow and one in the low flow
-  channel
+There are two `count` outliers, one in the high flow and one in the low
+flow channel (figure 1), however their removal did not impact the model
+results so they were kept in the dataset.
 
-![](feather_river_hsi_hurdle_model_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->![](feather_river_hsi_hurdle_model_files/figure-gfm/unnamed-chunk-2-2.png)<!-- -->
+![](feather_river_hsi_hurdle_model_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
+
+### High Flow vs. Low Flow Channel
+
+Table 1 and figure 2 explore whether fish presence was impacted by the
+high or low flow channels. Overall, the cumulative number of fish are
+similar across the high and low flow channels (table 1) however there
+are more fish present in the high flow channel for less time and the
+fish remain in the low flow channel for much longer (figure 2).
 
 | channel_location |     n |
 |:-----------------|------:|
@@ -81,52 +158,14 @@ Table 1. Total count of fish between high flow and low flow channels
 
 ![](feather_river_hsi_hurdle_model_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
 
-# Hurdle Models and Interpretation
+## Model 1 - Binary Cover Values
 
-A hurdle model was used in Gard 2024 to test for the effects of cover
-and habitat type on the total abundance of Chinook salmon at both site
-and cell level. Here we use the hurdle model to help understand the
-influence of velocity, depth, and cover on fish count and
-presence/absence.
+**Notes**
 
-**Hurdle Models**
+For this hurdle model, all substrate and cover variables
+presence/absence based on a 20% threshold
 
-Hurdle models are used when count data has an excess of zeros. These
-models can be understood as a mixture of two subset of populations. In
-one subset, we have a usual count model that may or may not generate
-zero, and the other subset only produce zero count.
-
-A hurdle model models excess zeroes separately from the rest of the
-data. The zero counts are modeled as a binary response variable and the
-positive counts are modeled using poisson distribution.
-
-*Interpreting a Hurdle Model*
-
-The binary part of the model helps identify factors that influence the
-presence/absence of fish. The coefficients of the zero part of the
-hurdle model represent the odds ratio of observing at least one fish.
-
-The count part of the model estimate the effects of predictor variables
-on the count outcome, excluding all zero counts. Coefficients of counts
-represent rate ratios of one or more fish observed.
-
-The Incidence Result Ratio (IRR) in the count part of the model (count
-\> 0) represent the multiplicative effect of a one-unit change in a
-predictor variable on the expected count of non-zero observations,
-assuming all other variables are held constant. For example, if the IRR
-for a predictor is 1.2, it means that a one-unit increase in that
-predictor is associated with a 20% increase in the expected count of
-non-zero observations, assuming all other variables remain constant. For
-the binary part of the model - if the coefficient for a predictor in the
-binary part of the hurdle model is 0.5, it means that a one-unit
-increase in the predictor is associated with a 50% increase in the odds
-of having a zero count versus a positive count, assuming all other
-variables are held constant.
-
-## Binary Cover Values
-
-**Notes** For this hurdle model, chose to make all substrate and cover
-variables presence/absence based on a 20% threshold
+TODO: add no_cover into variables
 
 **Predictors**
 
@@ -206,6 +245,8 @@ variables presence/absence based on a 20% threshold
     ## - cover_more_than_half_meter_overhead  2 5342.5
     ## - channel_location                     2 5421.7
 
+### Model 1 Results
+
     ## 
     ## Call:
     ## pscl::hurdle(formula = count ~ small_woody_cover_inchannel + depth + 
@@ -263,13 +304,14 @@ variables presence/absence based on a 20% threshold
     ## Number of iterations in BFGS optimization: 32 
     ## Log-likelihood: -2632 on 23 Df
 
-### Results
+    ## Scale for colour is already present.
+    ## Adding another scale for colour, which will replace the existing scale.
 
 ![](feather_river_hsi_hurdle_model_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
 
-## Using Absolute Values
+## Model 2 - Using Absolute Values
 
-This hurdle model uses substrate and cover percent values.
+This hurdle model uses substrate and cover absolute percent values.
 
 **Predictors**
 
@@ -394,6 +436,8 @@ This hurdle model uses substrate and cover percent values.
     ## - percent_small_woody_cover_inchannel          2 5035.7
     ## - channel_location                             2 5105.8
 
+### Model 2 Results
+
     ## 
     ## Call:
     ## pscl::hurdle(formula = count ~ percent_small_woody_cover_inchannel + 
@@ -456,9 +500,17 @@ This hurdle model uses substrate and cover percent values.
     ## Number of iterations in BFGS optimization: 45 
     ## Log-likelihood: -2479 on 19 Df
 
-### Results
-
 ![](feather_river_hsi_hurdle_model_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+
+## Discussion
+
+### Interpretation of Model 1
+
+### Interpretation of Model 2
+
+### Suggestions
+
+### Limitations
 
 ``` r
 knitr::knit_exit()
