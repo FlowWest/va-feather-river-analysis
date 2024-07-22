@@ -13,16 +13,20 @@ and where salmon occur. These data are relevant to the Healthy Rivers and Landsc
 in the Feather River and also track changes in fish density and distribution.
 
 This document provides a high level summary of these datasets which are published
-on the Environmental Data Initative (EDI):
+on the Environmental Data Initiative (EDI):
 
-- Feather River ongoing snorkel survey (EDI XX, insert when published)
+- Feather River ongoing snorkel survey ([EDI 1705.1](https://portal.edirepository.org/nis/mapbrowse?packageid=edi.1705.1))
 - Feather River mini snorkel survey (EDI XX, insert when published)
 
-Full summaries can be found here (insert links to full QC docs)
+Full summaries can be found here:
+
+- [mini snorkel QC](https://github.com/FlowWest/feather-mini-snorkel/blob/main/data-raw/qc_mini_snorkel_data.md)
+- [ongoing snorkel qc](https://github.com/SRJPE/JPE-datasets/blob/main/data-raw/qc-markdowns/seine-snorkel-data/feather-river/feather_snorkel_qc.md)
 
 ```{r, include = F, message = F, warning = F}
 library(tidyverse)
 library(googleCloudStorageR)
+library(EDIutils)
 knitr::opts_chunk$set(warning = F, message = F)
 colors_small <-  c("#9A8822", "#F5CDB4", "#F8AFA8", "#FDDDA0", "#74A089", #Royal 2
                    "#899DA4", "#C93312", "#DC863B" # royal 1 (- 3)
@@ -32,13 +36,17 @@ colors_small <-  c("#9A8822", "#F5CDB4", "#F8AFA8", "#FDDDA0", "#74A089", #Royal
 ongoing_snorkel <- read_csv(here::here("data", "ongoing_fish_observations.csv"))
 ongoing_snorkel_metadata <- read_csv(here::here("data", "ongoing_survey_characteristics.csv"))
 ongoing_snorkel_location <- read_csv(here::here("data", "ongoing_locations_lookup.csv"))
-# mini snorkel data
-mini_snorkel_raw <- read_csv(here::here("data", "microhabitat_observations.csv")) |> 
+
+# mini snorkel data (on EDI)
+res <- read_data_entity_names(packageId = "edi.1705.1")
+raw <- read_data_entity(packageId = "edi.1705.1", entityId = res$entityId[2])
+mini_snorkel_raw <- readr::read_csv(file = raw) |> 
   mutate(fish_presence = factor(ifelse(count == 0 | is.na(count), 0, 1)))
-location_raw <- read_csv(here::here("data", "survey_locations.csv"))
+raw <- read_data_entity(packageId = "edi.1705.1", entityId = res$entityId[1])
+location_raw <- readr::read_csv(file = raw) 
 ```
 
-# Mini Snorkel Survey
+# Mini Snorkel Survey {.tabset}
 
 The mini snorkel data contains two tables:
 
@@ -345,7 +353,7 @@ mini_snorkel_raw |>
        x = "")
 ```
 
-# Ongoing Snorkel Survey
+# Ongoing Snorkel Survey {.tabset}
 
 The ongoing snorkel data contains three tables:
 
