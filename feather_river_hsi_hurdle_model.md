@@ -1,7 +1,7 @@
 Mini Snorkel Feather Presence/Absence Model
 ================
 Maddee Rubenson
-2024-07-03
+2024-08-25
 
 - [Objective](#objective)
 - [Methodology](#methodology)
@@ -15,11 +15,10 @@ Maddee Rubenson
   - [Model 1 Results](#model-1-results)
 - [Model 2 - Using Absolute Values](#model-2---using-absolute-values)
   - [Model 2 Results](#model-2-results)
-- [Discussion](#discussion)
   - [Interpretation of Model 1](#interpretation-of-model-1)
   - [Interpretation of Model 2](#interpretation-of-model-2)
+- [Discussion](#discussion)
   - [Suggestions](#suggestions)
-  - [Limitations](#limitations)
 
 ## Objective
 
@@ -163,9 +162,10 @@ Table 1. Total count of fish between high flow and low flow channels
 **Notes**
 
 For this hurdle model, all substrate and cover variables
-presence/absence based on a 20% threshold
+presence/absence based on a 20% threshold. Some of the cover variables
+were also grouped as a cumulative of inchannel and overhead.
 
-TODO: add no_cover into variables
+<!-- TODO: add no_cover into variables -->
 
 **Predictors**
 
@@ -335,7 +335,7 @@ This hurdle model uses substrate and cover absolute percent values.
 
 - channel_location (high flow, low flow)
 
-**Notes** \*
+**Notes**
 
 - removed combined cover variables (small and large woody in channel
   with cover overhead) because of issues with collinearity within the
@@ -502,15 +502,78 @@ This hurdle model uses substrate and cover absolute percent values.
 
 ![](feather_river_hsi_hurdle_model_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
-## Discussion
-
 ### Interpretation of Model 1
+
+**Significant Predictors**
+
+*Fish Count*
+
+- Velocity (-)
+- Large Woody Cover Inchannel (-)
+- Submerged Aquatic Vegetation Inchannel (-)
+- Cover More than Half Meter Overhead (+)
+- Cobble Substrate (-)
+- Undercut Bank (-)
+- Channel Location LFC (-)
+
+*Fish Presence*
+
+- Small Woody Cover Inchannel (+)
+- Large Woody Cover Inchannel (+)
+- Cover More than Half Meter Overhead (+)
+- Cover Half Meter Ovherhead (+)
+- Undercut Bank (+)
+- Channel Location LFC (+)
 
 ### Interpretation of Model 2
 
+**Significant Predictors**
+
+*Fish Count*
+
+- Velocity (-)
+- Percent Submerged Aquatic Vegetation (-)
+- Percent Cover More Than Half Meter Overhead (+)
+- Percent Cobble Substrate (-)
+- Percent Undercut Bank (-)
+- Low Flow Channel (-)
+
+*Fish Presence*
+
+- Percent Small Woody Cover (+)
+- Velocity (-)
+- Percent Large Woody Cover inchannel (+)
+- Percent Submerged Aquatic Vegetation inchannel (+)
+- Percent Cover More than Half Meter Overhead (+)
+- Percent Undercut Bank (+)
+- Channel Location (LFC) (+)
+
+## Discussion
+
+- Removing large outliers in the `count` data within this analysis did
+  not impact the results so two outliers remained in the dataset
+- The cumulative number of fish are similar across the high and low flow
+  channels
+- Fish remain in low flow channel for a longer duration of time
+- In Model 2, velocity was a significant predictor in fish presence and
+  was not significant in Model 1
+- Low flow channel has a strong positive impact to fish presence - In
+  the LFC, the presence of fish is more likely
+- Low flow channel has a negative impact to the number of fish - In the
+  LFC, the number of fish is less
+- Velocity has a negative impact to fish count and fish presence -
+  Increased velocity, decreased or absent fish
+- The directionality between the significant predictors and whether they
+  were significant were similar between the two models, however there
+  was much large variability in the incidence result ratios for Model 1
+
 ### Suggestions
 
-### Limitations
+- The use of one model or the other is dependent on the input dataset
+  and whether absolute cover variables are available. The overall
+  consistency between the two approaches gives confidence that either
+  could work with assessing overall significant of cover on fish
+  presence.
 
 ``` r
 knitr::knit_exit()

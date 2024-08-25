@@ -55,14 +55,22 @@ depth, and velocity on fish presence and absence.
 ## Methodology
 
 Model was developed using [Feather River Mini Snorkel
-Data](https://github.com/FlowWest/feather-mini-snorkel). The data is structured with a numeric fish count variable that can be converted to a binary presence/absence. Logistic regression models were tested using the presence/absence as the response and cover, substrate, depth and velocity as the explanatory variables. However, due to the skewness of absence values, none of the developed models were well fit to the data. Based on a Gard 2024 paper (in-review), we decided to explore the use of hurdle models. Hurdle models excel with data types that are heavily skewed towards absence. 
+Data](https://github.com/FlowWest/feather-mini-snorkel). The data is
+structured with a numeric fish count variable that can be converted to a
+binary presence/absence. Logistic regression models were tested using
+the presence/absence as the response and cover, substrate, depth and
+velocity as the explanatory variables. However, due to the skewness of
+absence values, none of the developed models were well fit to the data.
+Based on a Gard 2024 paper (in-review), we decided to explore the use of
+hurdle models. Hurdle models excel with data types that are heavily
+skewed towards absence.
 
 ### Hurdle Models and Interpretation
 
-A hurdle model was used in Gard 2024 (in-review) to test for the effects of cover
-and habitat type on the total abundance of Chinook salmon at both site
-and cell level. Here we use the hurdle model to help understand the
-influence of velocity, depth, and cover on fish count and
+A hurdle model was used in Gard 2024 (in-review) to test for the effects
+of cover and habitat type on the total abundance of Chinook salmon at
+both site and cell level. Here we use the hurdle model to help
+understand the influence of velocity, depth, and cover on fish count and
 presence/absence.
 
 **Hurdle Models**
@@ -101,7 +109,7 @@ variables are held constant.
 
 ## Build Models
 
-### Read in data 
+### Read in data
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 # read in mini snorkel data
@@ -116,11 +124,13 @@ mini_snorkel_raw <- micro_hab |> left_join(locations) |>
 
 ```
 
-### Review Data 
+### Review Data
 
 #### Outliers
 
-There are two `count` outliers, one in the high flow and one in the low flow channel (figure 1), however their removal did not impact the model results so they were kept in the dataset. 
+There are two `count` outliers, one in the high flow and one in the low
+flow channel (figure 1), however their removal did not impact the model
+results so they were kept in the dataset.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 # Are the outliers in high flow or low flow channel?
@@ -139,9 +149,13 @@ mini_snorkel_raw |>
 mini_snorkel_model_ready <- mini_snorkel_raw 
 ```
 
-### High Flow vs. Low Flow Channel 
+### High Flow vs. Low Flow Channel
 
-Table 1 and figure 2 explore whether fish presence was impacted by the high or low flow channels. Overall, the cumulative number of fish are similar across the high and low flow channels (table 1) however there are more fish present in the high flow channel for less time and the fish remain in the low flow channel for much longer (figure 2).
+Table 1 and figure 2 explore whether fish presence was impacted by the
+high or low flow channels. Overall, the cumulative number of fish are
+similar across the high and low flow channels (table 1) however there
+are more fish present in the high flow channel for less time and the
+fish remain in the low flow channel for much longer (figure 2).
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 
@@ -167,12 +181,12 @@ mini_snorkel_model_ready |>
 
 ## Model 1 - Binary Cover Values
 
-**Notes** 
+**Notes**
 
-For this hurdle model, all substrate and cover
-variables presence/absence based on a 20% threshold
+For this hurdle model, all substrate and cover variables
+presence/absence based on a 20% threshold. Some of the cover variables were also grouped as a cumulative of inchannel and overhead. 
 
-TODO: add no_cover into variables
+<!-- TODO: add no_cover into variables -->
 
 **Predictors**
 
@@ -277,7 +291,7 @@ This hurdle model uses substrate and cover absolute percent values.
 
 -   channel_location (high flow, low flow)
 
-**Notes** \*
+**Notes**
 
 -   removed combined cover variables (small and large woody in channel
     with cover overhead) because of issues with collinearity within the
@@ -322,21 +336,72 @@ plot_model(best_model_hurdle, title = "Figure 4. Hurdle Model Results Using Abso
 
 ```
 
-## Discussion 
-
 ### Interpretation of Model 1
+
+**Significant Predictors**
+
+*Fish Count* 
+
+-   Velocity (-)
+-   Large Woody Cover Inchannel (-)
+-   Submerged Aquatic Vegetation Inchannel (-)
+-   Cover More than Half Meter Overhead (+)
+-   Cobble Substrate (-)
+-   Undercut Bank (-)
+-   Channel Location LFC (-)
+
+*Fish Presence* 
+
+-   Small Woody Cover Inchannel (+)
+-   Large Woody Cover Inchannel (+)
+-   Cover More than Half Meter Overhead (+)
+-   Cover Half Meter Ovherhead (+)
+-   Undercut Bank (+)
+-   Channel Location LFC (+)
 
 ### Interpretation of Model 2
 
+**Significant Predictors**
+
+*Fish Count*
+
+-   Velocity (-)
+-   Percent Submerged Aquatic Vegetation (-)
+-   Percent Cover More Than Half Meter Overhead (+)
+-   Percent Cobble Substrate (-)
+-   Percent Undercut Bank (-)
+-   Low Flow Channel (-)
+
+*Fish Presence*
+
+-   Percent Small Woody Cover (+)
+-   Velocity (-)
+-   Percent Large Woody Cover inchannel (+)
+-   Percent Submerged Aquatic Vegetation inchannel (+)
+-   Percent Cover More than Half Meter Overhead (+)
+-   Percent Undercut Bank (+)
+-   Channel Location (LFC) (+)
+
+## Discussion
+
+-   Removing large outliers in the `count` data within this analysis did not impact the results so two outliers remained in the dataset 
+-   The cumulative number of fish are similar across the high and low flow channels
+-   Fish remain in low flow channel for a longer duration of time
+-   In Model 2, velocity was a significant predictor in fish presence and was not significant in Model 1
+-   Low flow channel has a strong positive impact to fish presence - In
+    the LFC, the presence of fish is more likely
+-   Low flow channel has a negative impact to the number of fish - In
+    the LFC, the number of fish is less
+-   Velocity has a negative impact to fish count and fish presence -
+    Increased velocity, decreased or absent fish
+-   The directionality between the significant predictors and whether they were significant were similar between the two models, however there was much large variability in the incidence result ratios for Model 1
+
 ### Suggestions
 
-### Limitations 
+-   The use of one model or the other is dependent on the input dataset and whether absolute cover variables are available. The overall consistency between the two approaches gives confidence that either could work with assessing overall significant of cover on fish presence. 
 
 ```{r}
 knitr::knit_exit()
 ```
 
-## Next steps
-
-1.  Explore using a fixed effect - such as geomorphic unit (pool, glide,
-    riffle) or river mile
+## 
