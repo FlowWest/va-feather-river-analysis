@@ -1,0 +1,534 @@
+---
+title: "Mini Snorkel Feather Presence/Absence Model"
+author: "Maddee Rubenson"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: false
+    math_method:
+      engine: webtex
+      url: https://latex.codecogs.com/svg.image?
+  github_document:
+    toc: true
+    toc_depth: 3
+    number_sections: false
+    math_method:
+      engine: webtex
+      url: https://latex.codecogs.com/svg.image?
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(sjPlot)
+
+knitr::opts_chunk$set(echo = TRUE)
+
+theme_set(
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 11, face = "bold"),
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14)
+  )
+)
+
+
+custom_colors <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+
+options(scipen=999)
+
+
+```
+
+## Objective
+
+Develop a model that reflects the significance of cover, substrate,
+depth, and velocity on fish presence and absence.
+
+## Methodology
+
+Model was developed using [Feather River Mini Snorkel
+Data](https://github.com/FlowWest/feather-mini-snorkel). The data is
+structured with a numeric fish count variable that can be converted to a
+binary presence/absence. Logistic regression models were tested using
+the presence/absence as the response and cover, substrate, depth and
+velocity as the explanatory variables. However, due to the skewness of
+absence values, none of the developed models were well fit to the data.
+Based on a Gard 2024 paper (in-review), we decided to explore the use of
+hurdle models. Hurdle models excel with data types that are heavily
+skewed towards absence.
+
+### Hurdle Models and Interpretation
+
+A hurdle model was used in Gard 2024 (in-review) to test for the effects
+of cover and habitat type on the total abundance of Chinook salmon at
+both site and cell level. Here we use the hurdle model to help
+understand the influence of velocity, depth, and cover on fish count and
+presence/absence.
+
+**Hurdle Models**
+
+Hurdle models are used when count data has an excess of zeros. These
+models can be understood as a mixture of two subset of populations. In
+one subset, we have a usual count model that may or may not generate
+zero, and the other subset only produce zero count.
+
+A hurdle model models excess zeroes separately from the rest of the
+data. The zero counts are modeled as a binary response variable and the
+positive counts are modeled using poisson distribution.
+
+*Interpreting a Hurdle Model*
+
+The binary part of the model helps identify factors that influence the
+presence/absence of fish. The coefficients of the zero part of the
+hurdle model represent the odds ratio of observing at least one fish.
+
+The count part of the model estimate the effects of predictor variables
+on the count outcome, excluding all zero counts. Coefficients of counts
+represent rate ratios of one or more fish observed.
+
+The Incidence Result Ratio (IRR) in the count part of the model (count
+\> 0) represent the multiplicative effect of a one-unit change in a
+predictor variable on the expected count of non-zero observations,
+assuming all other variables are held constant. For example, if the IRR
+for a predictor is 1.2, it means that a one-unit increase in that
+predictor is associated with a 20% increase in the expected count of
+non-zero observations, assuming all other variables remain constant. For
+the binary part of the model - if the coefficient for a predictor in the
+binary part of the hurdle model is 0.5, it means that a one-unit
+increase in the predictor is associated with a 50% increase in the odds
+of having a zero count versus a positive count, assuming all other
+variables are held constant.
+
+## Build Models
+
+### Read in data
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# read in mini snorkel data
+# TODO: this will get updated to read from EDI when the data package is published
+micro_hab <- read_csv(here::here('data-raw', 'microhabitat_observations.csv'))
+locations <- read_csv(here::here('data-raw', 'survey_locations.csv'))
+
+mini_snorkel_raw <- micro_hab |> left_join(locations) |> 
+  mutate(count = ifelse(is.na(count), 0, count),
+        fish_presence = as.factor(ifelse(count < 1, "0", "1"))) |> 
+  glimpse()
+
+```
+
+### Review Data
+
+#### Outliers
+
+There are two `count` outliers, one in the high flow and one in the low
+flow channel (figure 1), however their removal did not impact the model
+results so they were kept in the dataset.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# # Are the outliers in high flow or low flow channel?
+# mini_snorkel_raw |>
+#   ggplot() +
+#   geom_point(aes(x = channel_location, y = count))
+
+mini_snorkel_raw |> 
+  filter(count > 0) |> 
+  ggplot() + 
+  geom_histogram(aes(count, fill = channel_location), binwidth = 100) + 
+  scale_fill_manual(values = custom_colors) + 
+  ylab("fish count") +
+  ggtitle('Figure 1. Histogram of fish count in the high and low flow channels') +facet_grid(~channel_location)
+
+mini_snorkel_model_ready <- mini_snorkel_raw 
+```
+
+### High Flow vs. Low Flow Channel
+
+Table 1 and figure 2 explore whether fish presence was impacted by the
+high or low flow channels. Overall there are approximately half as many
+fish present in the high flow channel compared to the low flow channel
+(table 1). There are more fish present in the high flow channel but they
+move quickly downstream into the low flow channel. Fish remain in the
+low flow channel for much longer time (figure 2).
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# looking at overall count data between the low flow/high flow channels
+mini_snorkel_model_ready |> 
+  group_by(channel_location) |> 
+  tally(count) |> 
+  knitr::kable(caption = "Table 1. Total count of fish between high flow and low flow channels")
+
+# This figure shows how there are more fish present in the high flow channel 
+# for less time. The fish stick around for much longer in the low flow channel. 
+mini_snorkel_model_ready |> 
+  group_by(channel_location, month = lubridate::month(date)) |> 
+  tally(count) |> 
+  ggplot() + 
+  geom_col(aes(x = as.factor(month), y = n, fill = channel_location), position = "dodge") + 
+  ylab("fish count") +
+  xlab("month") +
+  ggtitle('Figure 2. Fish presence as a functon of month and high flow/low flow channel') + 
+  scale_fill_manual(values = custom_colors)
+  
+```
+
+## Model 1 - Binary Cover Values
+
+**Notes**
+
+For this hurdle model, all substrate and cover variables
+presence/absence based on a 20% threshold. Some of the cover variables
+were also grouped as a cumulative of inchannel and overhead.
+
+<!-- TODO: add no_cover into variables -->
+
+**Predictors**
+
+-   small woody inchannel + half meter overhead
+-   small woody inchannel + more than half meter overhead
+-   large woody inchannel + half meter overhead
+-   large woody inchannel + more than half meter overhead
+-   cobble substrate
+-   boulder substrate
+-   small woody inchannel
+-   large woody inchannel
+-   submerged aquatic veg inchannel
+-   undercut bank
+-   more than half meter overhead
+-   small woody half meter overhead
+-   small woody more than half meter overhead
+-   velocity
+-   depth
+-   channel_location (high flow, low flow)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+percent_threshold <- 20
+
+# use a hurdle model (Gard 2024); 
+# pre-processing - all numeric values must be rounded to whole numbers
+hurdle_data <- mini_snorkel_model_ready |>
+    select(count,channel_location, depth, velocity, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank") |>
+  # create new cover variables, based off Gard 2023
+  mutate(small_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_small_woody_cover_inchannel,
+         small_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_small_woody_cover_inchannel,
+         large_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_large_woody_cover_inchannel,
+         large_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_large_woody_cover_inchannel) |>
+  # transform to presence/absence based on a defined threshold
+  mutate(cobble_substrate = ifelse(percent_cobble_substrate >= percent_threshold, 1, 0 ),
+         boulder_substrate = ifelse(percent_boulder_substrate >= percent_threshold, 1, 0 ),
+         small_woody_cover_inchannel = ifelse(percent_small_woody_cover_inchannel >= percent_threshold, 1, 0 ),
+         large_woody_cover_inchannel = ifelse(percent_large_woody_cover_inchannel >= percent_threshold, 1, 0 ),
+         submerged_aquatic_veg_inchannel = ifelse(percent_submerged_aquatic_veg_inchannel >= percent_threshold, 1, 0),
+         undercut_bank = ifelse(percent_undercut_bank >= percent_threshold, 1, 0),
+         no_cover_overhead = ifelse(percent_no_cover_overhead >= percent_threshold, 1, 0),
+         half_meter_overhead = ifelse(percent_cover_half_meter_overhead >= percent_threshold, 1, 0),
+         cover_more_than_half_meter_overhead = ifelse(percent_cover_more_than_half_meter_overhead >= percent_threshold, 1, 0),
+         no_cover_inchannel = ifelse(percent_no_cover_inchannel >= percent_threshold, 1, 0),
+         small_woody_half_meter_overhead = ifelse(small_woody_inchannel_and_half_meter_overhead >= percent_threshold, 1, 0),
+         small_woody_cover_more_than_half_meter_overhead = ifelse(small_woody_inchannel_and_more_than_half_meter_overhead >= percent_threshold, 1, 0),
+         large_woody_inchannel_and_half_meter_overhead = ifelse(large_woody_inchannel_and_more_than_half_meter_overhead >= percent_threshold, 1, 0),
+         large_woody_cover_more_than_half_meter_overhead = ifelse(large_woody_inchannel_and_more_than_half_meter_overhead >= percent_threshold, 1, 0)) |>
+  select(count, depth, velocity, cobble_substrate:large_woody_cover_more_than_half_meter_overhead, channel_location) |>
+  # remove no cover variables (no cover overhead, no cover in channel)
+  select(-contains("no_cover")) |>
+  #mutate_all(~ round(., digits = 0)) |>
+  na.omit() |>
+  glimpse()
+
+
+hurdle_model <- pscl::hurdle(count ~ small_woody_cover_inchannel + depth + velocity + large_woody_cover_inchannel + submerged_aquatic_veg_inchannel + cover_more_than_half_meter_overhead + half_meter_overhead + cobble_substrate + boulder_substrate + undercut_bank + channel_location, data = hurdle_data, dist = "negbin") 
+# Negative Binomial Distribution: The Negative Binomial distribution is more flexible than the Poisson distribution and is used when the variance of the counts is greater than the mean, which is known as overdispersion. The Negative Binomial model allows for the variance to be larger than the mean, which is common in count data where there is extra variability beyond what is expected from a Poisson distribution.
+
+
+# zero inflated models are capable of dealing with excess zero counts
+# NOTE: Chose to not use a zero inflated model because it operates under the assumption that excess zeros are generated by a separate process from the count values. 
+# zeroinf_model <- pscl::zeroinfl(count ~ ., data = hurdle_data) # , zero.dist = "binomial", dist = "negbin"
+
+best_model_hurdle <- MASS::stepAIC(hurdle_model, trace = TRUE)
+```
+
+### Model 1 Results
+
+```{r echo=FALSE}
+# tab_model(best_model_hurdle)
+
+summary(best_model_hurdle)
+
+plot_model(best_model_hurdle, title = "Figure 3. Hurdle Model Results Using Binary Presence/Absence for Cover and Substrate",  wrap.title = 50) + 
+  scale_color_manual(values = custom_colors[5:6])
+
+```
+
+## Model 2 - Using Absolute Values
+
+This hurdle model uses substrate and cover absolute percent values.
+
+**Predictors**
+
+-   depth
+-   velocity
+-   percent large woody cover in channel
+-   percent small woody cover in channel
+-   percent cover half meter overhead
+-   percent cover more than half meter overhead
+-   percent cobble
+-   percent boulder
+-   percent undercut bank
+-   channel_location (high flow, low flow)
+
+**Notes**
+
+-   removed combined cover variables (small and large woody in channel
+    with cover overhead) because of issues with collinearity within the
+    hurdle model
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# use a hurdle model (Gard 2024); 
+# pre-processing - all numeric values must be rounded to whole numbers
+
+hurdle_data <- mini_snorkel_model_ready |>
+    select(count, depth, velocity, channel_location, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank") |>
+  # create new cover variables, based off Gard 2023
+  mutate(small_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_small_woody_cover_inchannel,
+         small_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_small_woody_cover_inchannel,
+         large_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_large_woody_cover_inchannel,
+         large_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_large_woody_cover_inchannel) |>
+  # remove no cover variables (no cover overhead, no cover in channel)
+  select(-contains("no_cover")) |>
+  #mutate_all(~ round(., digits = 0)) |>
+  na.omit() |>
+  distinct() |>
+  glimpse()
+
+hurdle_model <- pscl::hurdle(count ~ percent_small_woody_cover_inchannel + depth + velocity + percent_large_woody_cover_inchannel + percent_submerged_aquatic_veg_inchannel + percent_cover_more_than_half_meter_overhead + percent_cover_half_meter_overhead + percent_cobble_substrate + percent_boulder_substrate + percent_undercut_bank + channel_location, data = hurdle_data, dist = "negbin") 
+# Negative Binomial Distribution: The Negative Binomial distribution is more flexible than the Poisson distribution and is used when the variance of the counts is greater than the mean, which is known as overdispersion. The Negative Binomial model allows for the variance to be larger than the mean, which is common in count data where there is extra variability beyond what is expected from a Poisson distribution.
+
+best_model_hurdle <- MASS::stepAIC(hurdle_model, trace = TRUE)
+```
+
+### Model 2 Results
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# tab_model(best_model_hurdle)
+
+summary(best_model_hurdle)
+
+
+plot_model(best_model_hurdle, title = "Figure 4. Hurdle Model Results Using Absolute Explanatory Variable Values", wrap.title = 50) + 
+    scale_color_manual(values = custom_colors[5:6])
+
+
+```
+
+## Model 3/4 - Splitting out High Flow and Low Flow into Separate Models
+
+### High Flow Model 
+
+For this hurdle model, all substrate and cover variables
+presence/absence based on a 20% threshold. Some of the cover variables
+were also grouped as a cumulative of inchannel and overhead.
+
+**Predictors**
+
+-   depth
+-   velocity
+-   percent large woody cover in channel
+-   percent small woody cover in channel
+-   percent cover half meter overhead
+-   percent cover more than half meter overhead
+-   percent cobble
+-   percent boulder
+-   percent undercut bank
+
+**Notes**
+
+-   removed combined cover variables (small and large woody in channel
+    with cover overhead) because of issues with collinearity within the
+    hurdle model
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# use a hurdle model (Gard 2024); 
+# pre-processing - all numeric values must be rounded to whole numbers
+
+hurdle_data <- mini_snorkel_model_ready |>
+    select(count, depth, velocity, channel_location, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank") |>
+  # create new cover variables, based off Gard 2023
+  mutate(small_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_small_woody_cover_inchannel,
+         small_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_small_woody_cover_inchannel,
+         large_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_large_woody_cover_inchannel,
+         large_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_large_woody_cover_inchannel) |>
+  # remove no cover variables (no cover overhead, no cover in channel)
+  select(-contains("no_cover")) |>
+  na.omit() |>
+  distinct() |>
+  filter(channel_location == "HFC") |> 
+  select(-channel_location) |> 
+  glimpse()
+
+hurdle_model <- pscl::hurdle(count ~ percent_small_woody_cover_inchannel + depth + velocity + percent_large_woody_cover_inchannel + percent_submerged_aquatic_veg_inchannel + percent_cover_more_than_half_meter_overhead + percent_cover_half_meter_overhead + percent_cobble_substrate + percent_boulder_substrate + percent_undercut_bank, data = hurdle_data, dist = "negbin") 
+# Negative Binomial Distribution: The Negative Binomial distribution is more flexible than the Poisson distribution and is used when the variance of the counts is greater than the mean, which is known as overdispersion. The Negative Binomial model allows for the variance to be larger than the mean, which is common in count data where there is extra variability beyond what is expected from a Poisson distribution.
+
+best_model_hurdle <- MASS::stepAIC(hurdle_model, trace = TRUE)
+```
+
+#### HFC Results
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# tab_model(best_model_hurdle)
+
+summary(best_model_hurdle)
+
+
+plot_model(best_model_hurdle, title = "Figure X. HFC Hurdle Model Results Using 20% Threshold for Explanatory Variable Values", wrap.title = 50) + 
+    scale_color_manual(values = custom_colors[5:6])
+
+
+```
+
+### Low Flow Channel 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+# use a hurdle model (Gard 2024); 
+# pre-processing - all numeric values must be rounded to whole numbers
+
+hurdle_data <- mini_snorkel_model_ready |>
+    select(count, depth, velocity, channel_location, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank") |>
+  # create new cover variables, based off Gard 2023
+  mutate(small_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_small_woody_cover_inchannel,
+         small_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_small_woody_cover_inchannel,
+         large_woody_inchannel_and_half_meter_overhead = percent_cover_half_meter_overhead + percent_large_woody_cover_inchannel,
+         large_woody_inchannel_and_more_than_half_meter_overhead = percent_cover_more_than_half_meter_overhead + percent_large_woody_cover_inchannel) |>
+  # remove no cover variables (no cover overhead, no cover in channel)
+  select(-contains("no_cover")) |>
+  na.omit() |>
+  distinct() |>
+  filter(channel_location == "LFC") |> 
+  select(-channel_location) |> 
+  glimpse()
+
+hurdle_model <- pscl::hurdle(count ~ percent_small_woody_cover_inchannel + depth + velocity + percent_large_woody_cover_inchannel + percent_submerged_aquatic_veg_inchannel + percent_cover_more_than_half_meter_overhead + percent_cover_half_meter_overhead + percent_cobble_substrate + percent_boulder_substrate + percent_undercut_bank, data = hurdle_data, dist = "negbin") 
+# Negative Binomial Distribution: The Negative Binomial distribution is more flexible than the Poisson distribution and is used when the variance of the counts is greater than the mean, which is known as overdispersion. The Negative Binomial model allows for the variance to be larger than the mean, which is common in count data where there is extra variability beyond what is expected from a Poisson distribution.
+
+best_model_hurdle <- MASS::stepAIC(hurdle_model, trace = TRUE)
+```
+
+#### LFC Results
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# tab_model(best_model_hurdle)
+
+summary(best_model_hurdle)
+
+
+plot_model(best_model_hurdle, title = "Figure X. LFC Hurdle Model Results Using 20% Threshold for Explanatory Variable Values", wrap.title = 50) + 
+    scale_color_manual(values = custom_colors[5:6])
+
+
+```
+
+## Interpretation of Model 1
+
+**Significant Predictors**
+
+*Fish Count*
+
+-   Small Woody Cover Inchannel (-)
+-   Depth (+)
+-   Velocity (-)
+-   Large Woody Cover Inchannel (-)
+-   Submerged Aquatic Vegetation Inchannel (-)
+-   Cover More than Half Meter Overhead (+)
+-   Cobble Substrate (-)
+-   Boulder Substrate (+)
+-   Undercut Bank (+)
+-   Channel Location LFC (-)
+
+*Fish Presence*
+
+-   Small Woody Cover Inchannel (+)
+-   Depth (+)
+-   Velocity (+)
+-   Large Woody Cover Inchannel (+)
+-   Cover More than Half Meter Overhead (+)
+-   Cobble Substrate (-)
+-   Boulder Substrate (+)
+-   Channel Location LFC (+)
+
+## Interpretation of Model 2
+
+**Significant Predictors**
+
+*Fish Count*
+
+-   Percent Small Woody Cover Inchannel (+)
+-   Depth (+)
+-   Percent Boulder Substrate (-)
+-   Channel Location (-)
+
+*Fish Presence*
+
+-   Percent Small Woody Cover Inchannel (+)
+-   Depth (+)
+-   Percent Large Woody Cover inchannel (+)
+-   Percent Cover More than Half Meter Overhead (+)
+-   Percent Cover Half Meter Overhead (+)
+-   Percent Cobble Substrate (-)
+-   Percent Undercut Bank (+)
+-   Channel Location (LFC) (+)
+
+## Discussion
+
+-   Model 1 has much a much larger range in the incidence result ratio,
+    implying that each significant predictor has a stronger impact on
+    fish count and fish presence than in Model 2 or Model 3
+
+**LFC/HFC**
+
+\- There are about twice as many fish counted in the Low Flow Channel
+
+\- Fish remain in low flow channel for a longer duration of time and
+move through the High Flow Channel quickly
+
+\- Low flow channel has a strong positive impact to fish presence. In
+the LFC, the presence of fish is more likely
+
+\- Low flow channel has a negative impact to the number of fish. In the
+LFC, the number of fish is less
+
+**Predictors**
+
+\- Velocity has a negative impact to fish count and fish presence -
+Increased velocity, decreased or absent fish
+
+\- In Model 2, velocity was a significant predictor in fish presence and
+was not significant in Model 1
+
+\- The directionality between the significant predictors and whether
+they were significant were similar between the two models, however there
+was much large variability in the incidence result ratios for Model 1
+
+## Other Discussion Points
+
+-   The use of one model or the other is dependent on the input dataset
+    and whether absolute cover variables are available. The overall
+    consistency between the two approaches gives confidence that either
+    could work with assessing overall significance of cover on fish
+    presence.
+-   Adding the 2002 data modified the results
+
+```{r}
+knitr::knit_exit()
+```
+
+## 
