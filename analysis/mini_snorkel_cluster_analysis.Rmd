@@ -21,12 +21,12 @@ library(googleCloudStorageR)
 knitr::opts_chunk$set(warning = F, message = F)
 
 # TODO update data connections when data are posted on EDI
-combined_snorkel <- read_csv(here::here("data-raw", "combined_feather_snorkel_data.csv"))
-
+ongoing_snorkel <- read_csv(here::here("data", "ongoing_fish_observations.csv"))
+ongoing_snorkel_metadata <- read_csv(here::here("data", "ongoing_survey_characteristics.csv"))
+ongoing_snorkel_location <- read_csv(here::here("data", "ongoing_locations_lookup.csv"))
 # mini snorkel data
-# TODO is there a table that associates the microhabitat plot with a lat/long?
-# TODO the survey locations are missing coordinates
-mini_snorkel_raw <- read_csv(here::here("data", "microhabitat_with_fish_observations.csv"))
+mini_snorkel_raw <- read_csv(here::here("data", "microhabitat_observations.csv")) |> 
+  mutate(fish_presence = factor(ifelse(count == 0 | is.na(count), 0, 1)))
 location_raw <- read_csv(here::here("data", "survey_locations.csv"))
 ```
 
@@ -38,7 +38,6 @@ location_raw <- read_csv(here::here("data", "survey_locations.csv"))
 - 4,891 quadrats (approx 36 per location)
 
 ```{r, include = F}
-# We are missing 76 locations from the location table
 check_location <- mini_snorkel_raw |> 
   left_join(location_raw |> 
               select(location_table_id) |> 
@@ -55,7 +54,7 @@ mini_snorkel_raw |> group_by(location_table_id) |> summarize(n_quadrats = length
  
  - depth: depth, dist_to_bottom
  - velocity: velocity, focal_velocity
- - count: treated as abesense/presence or actual count
+ - count: treated as absence/presence or actual count
  - cover: percent_no_cover_inchannel, percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_instream, percent_undercut_bank, percent_no_cover_overhead, percent_half_meter_overhead, percent_cover_more_than_half_meter
  - substrate: percent_fine_substrate, percent_sand_substrate, percent_small_gravel_substrate, percent_large_gravel_substrate, percent_cobble_substrate, percent_boulder_substrate
  
@@ -627,10 +626,11 @@ plot(clusters)
 
 ```{r, include = F}
 # Evaluating clusters
+# This doesn't seem to be working well
 
-library(NbClust)
+#library(NbClust)
 # currently not working to run all the indices so need to identify the ones that work
-res <- NbClust(data = cluster_data, method = "ward.D2")
+#res <- NbClust(data = cluster_data, method = "ward.D2")
 # kl = 6
 # ch = 5
 # hartigan = 6
@@ -1038,6 +1038,53 @@ mini_snorkel_raw |>
 
 ggsave("analysis/figures/cover_no_fish_obs_boxplot.png", height = 7, width = 9)
 ```
+
+#### Classify new data
+
+```{r, include = F}
+centroids <- cluster_assign |> 
+  group_by(cluster_groups) |> 
+  na.omit() |> # only about 10 rows are removed so OK
+  summarize(across(everything(), mean, .names = "mean_{.col}")) |> 
+  select(-cluster_groups)
+
+classify_observation <- function(new_obs, centroids) {
+    distances <- apply(centroids, 1, function(centroid) {
+        sum((new_obs - centroid)^2)
+    })
+    return(which.min(distances))
+}
+new_data <- mini_snorkel_raw |> 
+  filter(count == 0) |> 
+  mutate(month = month(date),
+         species_cat = case_when(species == "Chinook salmon" ~ 1,
+                                 grepl("Steelhead", species) ~ 2,
+                                 T ~ 3)) |> 
+  select(dist_to_bottom, 
+         focal_velocity, 
+         # percent_fine_substrate, # removed these for the time being
+         # percent_sand_substrate, # removed these for the time being
+         percent_small_gravel_substrate,
+         percent_large_gravel_substrate,
+         percent_cobble_substrate,
+         percent_boulder_substrate,
+         # percent_no_cover_inchannel, removing the no cover
+         percent_small_woody_cover_inchannel, 
+         percent_large_woody_cover_inchannel, 
+         percent_submerged_aquatic_veg_inchannel,
+         percent_undercut_bank, # percent_no_cover_overhead, 
+         percent_cover_half_meter_overhead,
+         #percent_cover_more_than_half_meter_overhead,
+         surface_turbidity, 
+         # count, 
+         # fl_mm, 
+         species_cat,
+         #date,
+         month) 
+new_data <- dist(new_data)
+new_clusters <- apply(new_data, 1, classify_observation, centroids = centroids)
+```
+
 
 #### substrate clustering
 
