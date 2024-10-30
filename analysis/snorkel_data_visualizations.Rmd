@@ -69,7 +69,7 @@ High level summary of the number of fish observed in habitats with cover (any co
 
 ## Presence/absence by microhabitat plot
 
-```{r}
+```{r, echo = F, message = F, warning=FALSE}
 mini_snorkel_model_ready |> 
   mutate(inchannel_cover_dummy = factor(ifelse(percent_no_cover_inchannel <= 80 | percent_no_cover_overhead <= 80, 1, 0))) |> 
   select(micro_hab_data_tbl_id, date, count, fish_presence, woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg, inchannel_cover_dummy) |> group_by(micro_hab_data_tbl_id, date, woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg, inchannel_cover_dummy) |> 
@@ -92,7 +92,7 @@ mini_snorkel_model_ready |>
 
 ## Count of fish observed
 
-```{r}
+```{r, echo = F, message = F, warning=FALSE}
 mini_snorkel_model_ready |> 
   mutate(inchannel_cover_dummy = factor(ifelse(percent_no_cover_inchannel <= 80 | percent_no_cover_overhead <= 80, 1, 0))) |> 
   #select(micro_hab_data_tbl_id, inchannel_cover_dummy, fish_presence) |> 
@@ -124,7 +124,7 @@ Note that cover categories are not mutually exclusive, e.g fish observations for
 
 ## Presence/absence by microhabitat plot
 
-```{r}
+```{r, echo = F, message = F, warning=FALSE}
 mini_snorkel_model_ready |> 
   mutate(inchannel_cover_dummy = factor(ifelse(percent_no_cover_inchannel <= 80 | percent_no_cover_overhead <= 80, 1, 0)),
          no_cover = ifelse(woody_debris == 0 & boulder == 0 & undercut_bank == 0 & aquatic_veg == 0 & overhanging_veg == 0, 1, 0)) |> 
@@ -150,7 +150,7 @@ mini_snorkel_model_ready |>
 ```
 ## Count of fish observed
 
-```{r}
+```{r, echo = F, message = F, warning=FALSE}
 mini_snorkel_model_ready |> 
   mutate(inchannel_cover_dummy = factor(ifelse(percent_no_cover_inchannel <= 80 | percent_no_cover_overhead <= 80, 1, 0)),
          no_cover = ifelse(woody_debris == 0 & boulder == 0 & undercut_bank == 0 & aquatic_veg == 0 & overhanging_veg == 0, 1, 0)) |> 
@@ -171,7 +171,7 @@ mini_snorkel_model_ready |>
 
 Understanding the overlap between cover categories
 
-```{r}
+```{r, echo = F, message = F, warning=FALSE}
 cover_by_type <- mini_snorkel_model_ready |> 
   select(count, woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg) |> 
   mutate(cover_1 = case_when(woody_debris > 0 ~ "woody debris",
