@@ -22,10 +22,6 @@ Analysis framing
 - individual cover types
 - cover or no cover
 
-# TODO
-
-- Add bar chart that has bar for absence/presence by cover type
-
 
 ```{r, include = F}
 library(tidyverse)
@@ -35,7 +31,7 @@ mini_snorkel_model_ready <- mini_fish_raw |>
   left_join(mini_locations_raw |> 
               distinct(location_table_id, date, channel_location)) |> 
   mutate(count = ifelse(is.na(count), 0, count),
-        fish_presence = as.factor(ifelse(count < 1, "0", "1")),
+        fish_presence = ifelse(count < 1, 0, 1),
          woody_debris = ifelse(percent_small_woody_cover_inchannel >= 20 | percent_large_woody_cover_inchannel >= 20, 1, 0),
          boulder = ifelse(percent_boulder_substrate >= 20, 1, 0),
          cobble = ifelse(percent_cobble_substrate >= 20, 1, 0),
@@ -56,181 +52,124 @@ colors_full <-  c("#9A8822", "#F5CDB4", "#F8AFA8", "#FDDDA0", "#74A089", #Royal 
                   "#798E87", "#C27D38", "#CCC591", "#29211F", # moonrise 2
                   "#85D4E3", "#F4B5BD", "#9C964A", "#CDC08C", "#FAD77B" # moonrise 3 
 )
+
+microhabitat_plots <- mini_snorkel_model_ready |> 
+  select(micro_hab_data_tbl_id, date, count, fish_presence, woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg) |> group_by(micro_hab_data_tbl_id, date, woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg) |> 
+  summarize(count = sum(count, na.rm = T),
+            fish_presence = sum(fish_presence),
+            fish_presence = ifelse(fish_presence > 0, 1, 0))
 ```
 
-# Presence/absence comparisons
+# Cover/no cover {.tabset}
 
-not helpful plot
+High level summary of the number of fish observed in habitats with cover (any cover type with greater than 20%) and no cover
 
-Percent cover by percent of observations where fish was present
+- categorize habitat as cover or no cover
+- group by cover/no cover and add up the number of fish observed
 
-```{r}
-total_fish_obs <- mini_snorkel_model_ready |> 
-  filter(fish_presence == "1") |> 
-  tally()
-mini_snorkel_model_ready |> 
-  mutate(month = month(date)) |> 
-  pivot_longer(cols = c(percent_cobble_substrate, percent_boulder_substrate, percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel, percent_undercut_bank, percent_cover_half_meter_overhead, percent_cover_more_than_half_meter_overhead), names_to = "cover", values_to = "cover_percent") |> 
-  filter(fish_presence == "1") |> 
-  group_by(cover, cover_percent) |> 
-  tally() |> 
-  mutate(percent = (n/1235)*100) |> 
-  ggplot(aes(x = percent, y = cover_percent)) +
-  geom_line() +
-  facet_wrap(~cover)   
-```
-Frequency of fish observations for each cover type and at each cover percentage level. Observations are colored based on whether other cover exists to communicate that often when fish were observed at 0% cover level for a particular cover, a different cover type existed (at 20% or greater).
-
-```{r}
-mini_snorkel_model_ready |> 
-  mutate(other_cover = ifelse(woody_debris == 0 & boulder == 0 & undercut_bank == 0 & aquatic_veg == 0 & overhanging_veg == 0, "no other cover", "other cover"),
-         other_cover = ifelse(is.na(other_cover), "no other cover", other_cover)) |> 
-  pivot_longer(cols = c(percent_cobble_substrate, percent_boulder_substrate, percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel, percent_undercut_bank, percent_cover_half_meter_overhead, percent_cover_more_than_half_meter_overhead), names_to = "cover", values_to = "cover_percent") |> 
-  filter(fish_presence == "1") |> 
-  group_by(cover, cover_percent, other_cover) |> 
-  summarize(count = sum(count)) |> 
-  ggplot(aes(y = count, x = cover_percent, fill = other_cover)) +
-  geom_col() +
-  facet_wrap(~cover) +
-  theme_bw() +
-  theme(legend.position = "bottom") +
-  scale_fill_manual(values = colors_small) +
-  labs(y = "number of fish observed",
-       x = "cover percentage",
-       fill = "")
-```
-This plot synthesizes this one step further by summarizing cover percentage based on below 20% or greater than/equal to.
-
-```{r}
-mini_snorkel_model_ready |> 
-  mutate(other_cover = ifelse(woody_debris == 0 & boulder == 0 & undercut_bank == 0 & aquatic_veg == 0 & overhanging_veg == 0, "no other cover", "other cover"),
-         other_cover = ifelse(is.na(other_cover), "no other cover", other_cover)) |> 
-  pivot_longer(cols = c(percent_cobble_substrate, percent_boulder_substrate, percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel, percent_undercut_bank, percent_cover_half_meter_overhead, percent_cover_more_than_half_meter_overhead), names_to = "cover", values_to = "cover_percent") |> 
-  filter(fish_presence == "1") |> 
-  mutate(cover_percent = ifelse(cover_percent >= 20, ">= 20% +", "< 20%")) |> 
-  group_by(cover, cover_percent, other_cover) |> 
-  summarize(count = sum(count)) |> 
-  ggplot(aes(y = count, x = cover_percent, fill = other_cover)) +
-  geom_col() +
-  facet_wrap(~cover) +
-  theme_bw() +
-  theme(legend.position = "bottom") +
-  scale_fill_manual(values = colors_small) +
-  labs(y = "number of fish observed",
-       x = "cover percentage",
-       fill = "")
-```
-
-
-
-
-```{r}
-mini_snorkel_model_ready |> 
-  filter(percent_boulder_substrate == 0) |> 
-  mutate(other_cover = ifelse(woody_debris == 1 | cobble == 1 | undercut_bank == 1 | aquatic_veg == 1 | overhanging_veg == 1, 1, 0)) |> 
-  group_by(other_cover) |> 
-  tally() |> 
-  ggplot(aes(x = other_cover, y = n)) +
-  geom_col()
-  
-  
-  pivot_longer(cols = c(percent_cobble_substrate, percent_boulder_substrate, percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel, percent_undercut_bank, percent_cover_half_meter_overhead, percent_cover_more_than_half_meter_overhead), names_to = "cover", values_to = "cover_percent") |> 
-  filter(fish_presence == "1") |> 
-  group_by(cover, cover_percent) |> 
-  tally() |> 
-  ggplot(aes(y = n, x = cover_percent)) +
-  geom_col() +
-  facet_wrap(~cover)   
-```
-
-```{r}
-microhabitat <- mini_snorkel_model_ready |> 
-  mutate(no_cover = ifelse(woody_debris == 0 & boulder == 0 & undercut_bank == 0 & aquatic_veg == 0 & overhanging_veg == 0, 1, 0)) |> 
-  pivot_longer(cols = c(no_cover, woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg), names_to = "cover_type", values_to = "cover_exists") |> 
-  select(micro_hab_data_tbl_id, cover_type, cover_exists, fish_presence) |> 
-  distinct() |> 
-  filter(cover_exists == 1)
-total_by_cover <- microhabitat |> 
-  group_by(cover_type) |> 
-  tally() |> 
-  rename(n_total = n)
-total_habitat <- total_by_cover |> 
-  summarize(n_total = sum(n_total))
-  
-total_by_cover |> 
-  mutate(percent = (n_total/total_habitat$n_total)*100) |> 
-  ggplot(aes(x = cover_type, y = percent)) +
-  geom_col() 
-```
-
-
-The percent of fish observations where a particular cover type also occurred (defined as 20% or greater)
-- Add no cover
-
-```{r}
-mini_snorkel_model_ready |> 
-  pivot_longer(cols = c(woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg), names_to = "cover_type", values_to = "cover_exists") |> 
-  filter(cover_exists == 1, fish_presence == "1") |> 
-  group_by(cover_type) |> 
-  tally() |> 
-  mutate(percent = (n/1235)*100) |> 
-  ggplot(aes(x = cover_type, y = percent)) +
-  geom_col() 
-```
-The percentage of times where the cover type was observed with fish out of total times cover was observed
-- This isn't a great visualization because we are more interested in the number of times the fish was observed where was it
-
-```{r}
-microhabitat <- mini_snorkel_model_ready |> 
-  pivot_longer(cols = c(woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg), names_to = "cover_type", values_to = "cover_exists") |> 
-  select(micro_hab_data_tbl_id, cover_type, cover_exists, fish_presence) |> 
-  distinct() |> 
-  filter(cover_exists == 1)
-total_by_cover <- microhabitat |> 
-  group_by(cover_type) |> 
-  tally() |> 
-  rename(n_total = n)
-  
-microhabitat |> 
-  group_by(cover_type, fish_presence) |> 
-  tally() |> 
-  left_join(total_by_cover) |> 
-  mutate(percent = (n/n_total)*100) |> 
-  ggplot(aes(x = cover_type, y = percent, fill = fish_presence)) +
-  geom_col() 
-```
-
-Fish are not observed at both high and low cover percentages.
-
-```{r}
-mini_snorkel_model_ready |> 
-
-  pivot_longer(cols = c(percent_cobble_substrate, percent_boulder_substrate, percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel, percent_undercut_bank, percent_cover_half_meter_overhead, percent_cover_more_than_half_meter_overhead), names_to = "cover", values_to = "cover_percent") |> 
-  filter(fish_presence == "1") |> 
-  group_by(cover, cover_percent) |> 
-  tally() |> 
-  mutate(percent = (n/1235)*100) |> 
-  ggplot(aes(x = percent, y = cover_percent)) +
-  geom_point() +
-  facet_wrap(~cover)   
-```
+## Presence/absence by microhabitat plot
 
 ```{r}
 mini_snorkel_model_ready |> 
   mutate(inchannel_cover_dummy = factor(ifelse(percent_no_cover_inchannel <= 80 | percent_no_cover_overhead <= 80, 1, 0))) |> 
-  filter(fish_presence == "1") |> 
-  group_by(inchannel_cover_dummy) |> 
+  select(micro_hab_data_tbl_id, date, count, fish_presence, woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg, inchannel_cover_dummy) |> group_by(micro_hab_data_tbl_id, date, woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg, inchannel_cover_dummy) |> 
+  summarize(count = sum(count, na.rm = T),
+            fish_presence = sum(fish_presence),
+            fish_presence = ifelse(fish_presence > 0, 1, 0)) |> 
+  mutate(category = ifelse(inchannel_cover_dummy == 0, "no cover", "cover"),
+         fish_presence = ifelse(fish_presence == 0, "fish absent", "fish present")) |> 
+  group_by(category, fish_presence) |> 
   tally() |> 
-  mutate(percent = (n/1235)*100) |> 
-  mutate(category = ifelse(inchannel_cover_dummy == 0, "no cover", "cover")) |> 
-  ggplot(aes(x = category, y = percent)) +
-  geom_col() +
+  ggplot(aes(x = as.factor(fish_presence), y = n, fill = category)) +
+  scale_fill_manual(values = colors_small) + 
+  geom_bar(stat= "identity", position = "dodge") +
+  geom_text(aes(label = n), position = position_dodge(0.9)) +
   theme_bw() +
+  #theme(legend.position = "none") +
   labs(x = "",
-       y = "percent of fish observations")
+       y = "number of microhabitat plots")
 ```
 
-Alluvial plot to look at combinations of cover
+## Count of fish observed
+
+```{r}
+mini_snorkel_model_ready |> 
+  mutate(inchannel_cover_dummy = factor(ifelse(percent_no_cover_inchannel <= 80 | percent_no_cover_overhead <= 80, 1, 0))) |> 
+  #select(micro_hab_data_tbl_id, inchannel_cover_dummy, fish_presence) |> 
+  #distinct() |> 
+  group_by(inchannel_cover_dummy) |> 
+  summarize(count = sum(count)) |> 
+  #mutate(percent = (n/1235)*100) |> 
+  mutate(category = ifelse(inchannel_cover_dummy == 0, "no cover", "cover")) |> 
+  ggplot(aes(x = category, y = count, fill = category)) +
+  scale_fill_manual(values = colors_small) + 
+  geom_col() +
+  theme_bw() +
+  theme(legend.position = "none") +
+  labs(x = "",
+       y = "number of fish observed")
+```
+
+# Cover types {.tabset}
+
+Same plots cover/no cover but categorizes cover similar to how presented in Strategic Plan
+
+- Woody debris: small or large woody inchannel cover greater or equal to 20%
+- Boulder: boulder substrate greater or equal to 20%
+- Cobble: cobble substrate greater or equal to 20%
+- Undercut bank: undercut bank greater or equal to 20%
+- Overhanging vegetation: no cover overhead is less than or equal to 80%
+
+Note that cover categories are not mutually exclusive, e.g fish observations for woody debris may also have undercut bank.
+
+## Presence/absence by microhabitat plot
+
+```{r}
+mini_snorkel_model_ready |> 
+  mutate(inchannel_cover_dummy = factor(ifelse(percent_no_cover_inchannel <= 80 | percent_no_cover_overhead <= 80, 1, 0)),
+         no_cover = ifelse(woody_debris == 0 & boulder == 0 & undercut_bank == 0 & aquatic_veg == 0 & overhanging_veg == 0, 1, 0)) |> 
+  select(micro_hab_data_tbl_id, date, count, fish_presence, no_cover, woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg, inchannel_cover_dummy) |> group_by(micro_hab_data_tbl_id, date, no_cover, woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg, inchannel_cover_dummy) |> 
+  summarize(count = sum(count, na.rm = T),
+            fish_presence = sum(fish_presence),
+            fish_presence = ifelse(fish_presence > 0, 1, 0)) |> 
+  mutate(fish_presence = ifelse(fish_presence == 0, "fish absent", "fish present")) |> 
+  pivot_longer(cols = c(no_cover, woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg), names_to = "cover_type", values_to = "cover_exists") |> 
+  filter(cover_exists == 1) |> 
+  group_by(cover_type, fish_presence) |> 
+  tally() |> 
+  ggplot(aes(x = cover_type, y = n, fill = fish_presence)) +
+  scale_fill_manual(values = c("#F5CDB4", "#9A8822")) + 
+  geom_bar(stat= "identity", position = "dodge") +
+  geom_text(aes(label = n), position = position_dodge(0.9)) +
+  theme_bw() +
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 30)) +
+  labs(x = "",
+       y = "number of microhabitat plots",
+        fill = "")
+```
+## Count of fish observed
+
+```{r}
+mini_snorkel_model_ready |> 
+  mutate(inchannel_cover_dummy = factor(ifelse(percent_no_cover_inchannel <= 80 | percent_no_cover_overhead <= 80, 1, 0)),
+         no_cover = ifelse(woody_debris == 0 & boulder == 0 & undercut_bank == 0 & aquatic_veg == 0 & overhanging_veg == 0, 1, 0)) |> 
+  pivot_longer(cols = c(no_cover, woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg), names_to = "cover_type", values_to = "cover_exists") |> 
+  filter(cover_exists == 1) |> 
+  group_by(cover_type) |> 
+  summarize(count = sum(count)) |> 
+  ggplot(aes(x = cover_type, y = count, fill = cover_type)) +
+  scale_fill_manual(values = c("#9A8822","#9A8822","#9A8822","#F5CDB4","#9A8822","#9A8822","#9A8822")) + 
+  geom_col() +
+  theme_bw() +
+  theme(legend.position = "none") +
+  labs(x = "",
+       y = "number of fish observed")
+```
+
+# Other plots
+
+Understanding the overlap between cover categories
 
 ```{r}
 cover_by_type <- mini_snorkel_model_ready |> 
@@ -266,8 +205,76 @@ cover_by_type |>
   geom_alluvium(aes(fill = cover_1)) +
   geom_stratum(width = 1/12, fill = "black", color = "grey") +
   geom_label(stat = "stratum", aes(label = after_stat(stratum))) +
-  scale_x_discrete(limits = c("cover_1", "cover_2","cover_3"))
+  scale_x_discrete(limits = c("cover_1", "cover_2","cover_3")) +
+  scale_fill_manual(values = colors_small) +
+  theme_bw() +
+  labs(y = "number of fish observations",
+       fill = "")
 ```
+
+
+
+
+
+
+```{r}
+# count fish observation per microhabitat plot
+microhabitat <- mini_snorkel_model_ready |> 
+  mutate(no_cover = ifelse(woody_debris == 0 & boulder == 0 & undercut_bank == 0 & aquatic_veg == 0 & overhanging_veg == 0, 1, 0)) |> 
+  pivot_longer(cols = c(no_cover, woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg), names_to = "cover_type", values_to = "cover_exists") |> 
+  select(micro_hab_data_tbl_id, cover_type, cover_exists, fish_presence) |> 
+  distinct() |> 
+  filter(cover_exists == 1)
+total_by_cover <- microhabitat |> 
+  group_by(cover_type) |> 
+  tally() |> 
+  rename(n_total = n)
+total_habitat <- total_by_cover |> 
+  summarize(n_total = sum(n_total))
+  
+total_by_cover |> 
+  mutate(percent = (n_total/total_habitat$n_total)*100) |> 
+  ggplot(aes(x = cover_type, y = percent)) +
+  geom_col() +
+  theme_bw()
+```
+
+
+The percent of fish observations where a particular cover type also occurred (defined as 20% or greater)
+- Add no cover
+
+```{r}
+mini_snorkel_model_ready |> 
+  pivot_longer(cols = c(woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg), names_to = "cover_type", values_to = "cover_exists") |> 
+  filter(cover_exists == 1, fish_presence == "1") |> 
+  group_by(cover_type) |> 
+  tally() |> 
+  mutate(percent = (n/1235)*100) |> 
+  ggplot(aes(x = cover_type, y = percent)) +
+  geom_col() 
+```
+
+
+Fish are not observed at both high and low cover percentages.
+
+```{r}
+mini_snorkel_model_ready |> 
+
+  pivot_longer(cols = c(percent_cobble_substrate, percent_boulder_substrate, percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel, percent_undercut_bank, percent_cover_half_meter_overhead, percent_cover_more_than_half_meter_overhead), names_to = "cover", values_to = "cover_percent") |> 
+  filter(fish_presence == "1") |> 
+  group_by(cover, cover_percent) |> 
+  tally() |> 
+  mutate(percent = (n/1235)*100) |> 
+  ggplot(aes(x = percent, y = cover_percent)) +
+  geom_point() +
+  facet_wrap(~cover)   
+```
+
+
+
+Alluvial plot to look at combinations of cover
+
+
 
 # Absolute number of fish
 
@@ -283,4 +290,118 @@ mini_snorkel_model_ready |>
   theme_bw() +
   labs(x = "",
        y = "total number of fish observed")
+```
+
+
+# Scrap
+
+not helpful plot
+
+Percent cover by percent of observations where fish was present
+
+```{r}
+total_fish_obs <- mini_snorkel_model_ready |> 
+  filter(fish_presence == "1") |> 
+  tally()
+mini_snorkel_model_ready |> 
+  mutate(month = month(date)) |> 
+  pivot_longer(cols = c(percent_cobble_substrate, percent_boulder_substrate, percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel, percent_undercut_bank, percent_cover_half_meter_overhead, percent_cover_more_than_half_meter_overhead), names_to = "cover", values_to = "cover_percent") |> 
+  filter(fish_presence == "1") |> 
+  group_by(cover, cover_percent) |> 
+  tally() |> 
+  mutate(percent = (n/1235)*100) |> 
+  ggplot(aes(x = cover_percent, y = n)) +
+  geom_col() +
+  facet_wrap(~cover)   
+```
+
+```{r}
+# count fish observation per microhabitat plot
+microhabitat <- mini_snorkel_model_ready |> 
+  mutate(no_cover = ifelse(woody_debris == 0 & boulder == 0 & undercut_bank == 0 & aquatic_veg == 0 & overhanging_veg == 0, 1, 0)) |> 
+  pivot_longer(cols = c(no_cover, woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg), names_to = "cover_type", values_to = "cover_exists") |> 
+  select(micro_hab_data_tbl_id, cover_type, cover_exists, fish_presence) |> 
+  distinct() |> 
+  filter(cover_exists == 1)
+total_by_cover <- microhabitat |> 
+  group_by(cover_type) |> 
+  tally() |> 
+  rename(n_total = n)
+total_habitat <- total_by_cover |> 
+  summarize(n_total = sum(n_total))
+  
+total_by_cover |> 
+  mutate(percent = (n_total/total_habitat$n_total)*100) |> 
+  ggplot(aes(x = cover_type, y = percent)) +
+  geom_col() +
+  theme_bw()
+```
+
+Frequency of fish observations for each cover type and at each cover percentage level. Observations are colored based on whether other cover exists to communicate that often when fish were observed at 0% cover level for a particular cover, a different cover type existed (at 20% or greater).
+
+This trend also applies if use number of fish observations (present/absent) rather than absolute number of fish observed.
+
+```{r}
+mini_snorkel_model_ready |> 
+  mutate(other_cover = ifelse(woody_debris == 0 & boulder == 0 & undercut_bank == 0 & aquatic_veg == 0 & overhanging_veg == 0, "no other cover", "other cover"),
+         other_cover = ifelse(is.na(other_cover), "no other cover", other_cover)) |> 
+  pivot_longer(cols = c(percent_cobble_substrate, percent_boulder_substrate, percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel, percent_undercut_bank, percent_cover_half_meter_overhead, percent_cover_more_than_half_meter_overhead), names_to = "cover", values_to = "cover_percent") |> 
+  filter(fish_presence == "1") |> 
+  group_by(cover, cover_percent, other_cover) |> 
+  summarize(count = sum(count)) |> 
+  ggplot(aes(y = count, x = cover_percent, fill = other_cover)) +
+  geom_col() +
+  facet_wrap(~cover) +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  scale_fill_manual(values = colors_small) +
+  labs(y = "number of fish observed",
+       x = "cover percentage",
+       fill = "")
+```
+
+This plot synthesizes this one step further by summarizing cover percentage based on below 20% or greater than/equal to.
+
+```{r}
+mini_snorkel_model_ready |> 
+  mutate(other_cover = ifelse(woody_debris == 0 & boulder == 0 & undercut_bank == 0 & aquatic_veg == 0 & overhanging_veg == 0, "no other cover", "other cover"),
+         other_cover = ifelse(is.na(other_cover), "no other cover", other_cover)) |> 
+  pivot_longer(cols = c(percent_cobble_substrate, percent_boulder_substrate, percent_small_woody_cover_inchannel, percent_large_woody_cover_inchannel, percent_submerged_aquatic_veg_inchannel, percent_undercut_bank, percent_cover_half_meter_overhead, percent_cover_more_than_half_meter_overhead), names_to = "cover", values_to = "cover_percent") |> 
+  filter(fish_presence == "1") |> 
+  mutate(cover_percent = ifelse(cover_percent >= 20, ">= 20% +", "< 20%")) |> 
+  group_by(cover, cover_percent, other_cover) |> 
+  summarize(count = sum(count)) |> 
+  filter(!is.na(cover_percent)) |> 
+  ggplot(aes(y = count, x = cover_percent, fill = other_cover)) +
+  geom_col() +
+  facet_wrap(~cover) +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  scale_fill_manual(values = colors_small) +
+  labs(y = "number of fish observed",
+       x = "cover percentage",
+       fill = "")
+```
+
+The percentage of times where the cover type was observed with fish out of total times cover was observed
+- This isn't a great visualization because we are more interested in the number of times the fish was observed where was it
+
+```{r}
+microhabitat <- mini_snorkel_model_ready |> 
+  pivot_longer(cols = c(woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg), names_to = "cover_type", values_to = "cover_exists") |> 
+  select(micro_hab_data_tbl_id, cover_type, cover_exists, fish_presence) |> 
+  distinct() |> 
+  filter(cover_exists == 1)
+total_by_cover <- microhabitat |> 
+  group_by(cover_type) |> 
+  tally() |> 
+  rename(n_total = n)
+  
+microhabitat |> 
+  group_by(cover_type, fish_presence) |> 
+  tally() |> 
+  left_join(total_by_cover) |> 
+  mutate(percent = (n/n_total)*100) |> 
+  ggplot(aes(x = cover_type, y = percent, fill = fish_presence)) +
+  geom_col() 
 ```
