@@ -1,7 +1,7 @@
 Mini Snorkel Feather Presence/Absence Model
 ================
 Maddee Rubenson
-2024-11-01
+2024-11-12
 
 - [Objective](#objective)
 - [Methodology](#methodology)
