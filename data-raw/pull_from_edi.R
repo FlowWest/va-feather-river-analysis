@@ -15,3 +15,9 @@ raw <- read_data_entity(packageId = "edi.1705.2", entityId = res$entityId[1])
 mini_locations_raw <- read_csv(file = raw)
 raw <- read_data_entity(packageId = "edi.1705.2", entityId = res$entityId[2])
 mini_fish_raw <- read_csv(file = raw)
+
+# feather river redd data
+res <- read_data_entity_names(packageId = "edi.1802.2")
+raw <- read_data_entity(packageId = "edi.1802.2", entityId = res$entityId[1])
+redd_data <- read_csv(file = raw)
+#write_csv(redd_data, "data-raw/redd_data.csv")
