@@ -99,13 +99,14 @@ locations_sf <- sf::st_as_sf(mini_locations_raw |>
   select(location_table_id, location, channel_type, date) |> 
   mutate(location_table_id = paste0(date, " (location id: ", location_table_id, ")")) |> 
   mutate(color = colors_full[match(location, location)]) 
-# group_by(geometry, location, channel_type, color) |> 
-# summarise(location_table_id = paste0(unique(location_table_id), collapse = "; ")) |> glimpse()
 
 
 ```
 
 ### Make map
+
+TODO: need to visualize the habitat amount better 
+
 ```{r}
 redd_sf <- sf::st_as_sf(redd_data |> 
                           filter(!is.na(latitude)), coords = c('longitude', 'latitude'))
@@ -125,7 +126,7 @@ leaflet() |>
   addCircleMarkers(data = redd_sf, 
                    #layerId = ~redds,
                    color = 'darkred',
-                   radius = 6,
+                   radius = 2,
                    fill = TRUE,
                    fillOpacity = 0.2,
                    opacity = 0.6) |>
@@ -133,6 +134,6 @@ leaflet() |>
     baseGroups = c("Aerial Imagery", "Street Map"),
     position = "topleft",
     options = layersControlOptions(collapsed = FALSE)
-  ) #|> 
-  #addLegend(colors = "darkred", labels = "Redd Locations")
+  ) |> 
+  addLegend(colors = "darkred", labels = "Redd Locations")
 ```
