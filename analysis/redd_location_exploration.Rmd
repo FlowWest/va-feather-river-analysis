@@ -1,6 +1,6 @@
 ---
 title: "Redd Locations and Habitat Utilization"
-author: "Maddee Rubenson (FlowWest)"
+author: "Maddee Wiggins (FlowWest)"
 date: "`r Sys.Date()`"
 output: html_document
 editor_options: 
@@ -8,8 +8,11 @@ editor_options:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
 library(tidyverse)
 library(leaflet)
 library(sf)
@@ -17,17 +20,16 @@ library(sf)
 
 ## Objective 
 
-Use Feather River Redd data to create a heatmap of redds to better understand if presence data is correlated with spawning.
+Using mini snorkel data from the Feather River, make a visual to understand if habitat utilization and location of redds is correlated. 
 
-#### Pull from EDI
-
-```{r}
+```{r message=FALSE, warning=FALSE}
 source(here::here("data-raw", "pull_from_edi.R"))
-
-#redd_data <- read_csv(here::here('data-raw', "redd_data.csv")) 
-
-redd_data |> glimpse()
 ```
+
+
+### Redd data over time 
+
+This visual represents the number of redds over time at each location. It helps provide context on which sites generally have redds and if they have redds consistently over time. 
 
 ```{r}
 redd_data |> 
@@ -35,11 +37,7 @@ redd_data |>
   geom_tile(color = "white",  linewidth = 0.5)
 ```
 
-TODO: create a map of cover and number of redds
-
-
 ```{r}
-
 colors_full <-  c("#9A8822", "#F5CDB4", "#F8AFA8", "#FDDDA0", "#74A089", #Royal 2
                   "#899DA4", "#C93312", "#DC863B", # royal 1 (- 3)
                   "#F1BB7B", "#FD6467", "#5B1A18", "#D67236",# Grand Budapest 1 (-4)
@@ -75,7 +73,7 @@ feather_cover <- mini_fish_raw |>
          undercut_bank = percent_undercut_bank, 
          aquatic_veg = percent_submerged_aquatic_veg_inchannel, 
          overhanging_veg = percent_cover_half_meter_overhead + percent_cover_more_than_half_meter_overhead) |> 
-  select(micro_hab_data_tbl_id, location_table_id, transect_code, location,
+  select(micro_hab_data_tbl_id, channel_location, location_table_id, transect_code, location,
          woody_debris:overhanging_veg, count, date) |>
   pivot_longer(cols = c(woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg), names_to = "cover_type", 
                values_to = "percent_cover") |>  
@@ -96,16 +94,17 @@ summary_cover <- feather_cover |>
 locations_sf <- sf::st_as_sf(mini_locations_raw |> 
                                distinct(location_table_id, date, channel_location, .keep_all = T) |> 
                                na.omit(), coords = c('longitude', 'latitude')) |> 
-  select(location_table_id, location, channel_type, date) |> 
+  select(location_table_id, channel_location, location, channel_type, date) |> 
   mutate(location_table_id = paste0(date, " (location id: ", location_table_id, ")")) |> 
-  mutate(color = colors_full[match(location, location)]) 
+  mutate(color = colors_full[match(location, location)]) |> 
+  mutate(channel_type_color = ifelse(channel_location == "LFC", "darkblue", "lightblue"))
 
 
 ```
 
-### Make map
+### Map of habitat and redds
 
-TODO: need to visualize the habitat amount better 
+This map provides context into the habitat transect locations, identified by whether they are in the high flow "HFC" or low flow "LFC" part of the Feather River. Redds cluster around habitat transect locatins but in no consistent manner and are only shown as far south as McFarland Riffle. 
 
 ```{r}
 redd_sf <- sf::st_as_sf(redd_data |> 
@@ -115,7 +114,7 @@ leaflet() |>
   addProviderTiles(providers$OpenStreetMap, group = "Street Map") |>
   addCircleMarkers(data = locations_sf, 
                    # layerId = ~location, 
-                   color = ~color,
+                   color = ~channel_type_color,
                    radius = 6,
                    fill = TRUE,
                    fillOpacity = 0.6,
@@ -135,5 +134,6 @@ leaflet() |>
     position = "topleft",
     options = layersControlOptions(collapsed = FALSE)
   ) |> 
-  addLegend(colors = "darkred", labels = "Redd Locations")
+  addLegend(colors = "darkred", labels = "Redd Locations") |> 
+  addLegend(colors = unique(locations_sf$channel_type_color), labels = unique(locations_sf$channel_location))
 ```
