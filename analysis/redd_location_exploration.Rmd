@@ -9,35 +9,41 @@ editor_options:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
-	echo = FALSE,
-	message = FALSE,
-	warning = FALSE
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
 )
 library(tidyverse)
 library(leaflet)
 library(sf)
+library(scales)
 ```
 
-## Objective 
+## Objective
 
-Using mini snorkel data from the Feather River, make a visual to understand if habitat utilization and location of redds is correlated. 
+Using mini snorkel data from the Feather River, make a visual to understand if habitat utilization and location of redds is correlated.
 
 ```{r message=FALSE, warning=FALSE}
 source(here::here("data-raw", "pull_from_edi.R"))
 ```
 
-#### Remove zero Redds
-Remove locations that have zero redd
+### Process
+
+-   Source Feather River redd data from EDI
+
+-   Remove locations that have zero redds
+
+-   From Mini Snorkel data, extract location, channel type, channel location (High Flow vs. Low Flow), and number of fish counted
 
 ```{r}
+# remove zero redds
 redd_data_with_redds <- redd_data |> 
   filter(number_redds > 0)
 ```
 
+### Redd data over time
 
-### Redd data over time 
-
-This visual represents the number of redds over time at each location. It helps provide context on which sites generally have redds and if they have redds consistently over time. 
+This visual represents the number of redds over time at each location. It helps provide context on which sites generally have redds and if they have redds consistently over time.
 
 ```{r}
 redd_data_with_redds |> 
@@ -46,6 +52,8 @@ redd_data_with_redds |>
 ```
 
 ```{r}
+# Process mini snorkel data 
+
 colors_full <-  c("#9A8822", "#F5CDB4", "#F8AFA8", "#FDDDA0", "#74A089", #Royal 2
                   "#899DA4", "#C93312", "#DC863B", # royal 1 (- 3)
                   "#F1BB7B", "#FD6467", "#5B1A18", "#D67236",# Grand Budapest 1 (-4)
@@ -87,32 +95,39 @@ feather_cover <- mini_fish_raw |>
                values_to = "percent_cover") |>  
   distinct() |> 
   left_join(location_order) |> 
-  mutate(fish_presence = ifelse(count > 0, "Yes", "No")) |> select(-count) |> 
-  mutate(location_table_id = paste0(date, " (location id: ", location_table_id, ")")) |> glimpse()
+  mutate(fish_presence = ifelse(count > 0, "Yes", "No")) |> 
+  mutate(location_table_id = paste0(date, " (location id: ", location_table_id, ")")) 
 
-summary_cover <- feather_cover |> 
-  mutate(month = month(date, label = T)) |> 
-  group_by(location, cover_type, order, fish_presence, month) |> 
-  summarize(percent_cover = mean(percent_cover, na.rm = T)) |> 
-  mutate(percent_cover = ifelse(is.na(percent_cover), 0, percent_cover))
-
-# pivot_wider(id_cols = c(location, cover_type, order), names_from = "fish_presence", values_from = "percent_cover")
-# added distinct statement because there seem to be duplicates in the location table (we should fix this on EDI)
+# TODO: Based off of the large fluctuation in `count` variable, a binary
+# presence/absence might be better
+summary_fish_count <- feather_cover |>
+  group_by(location) |>
+  summarize(
+    n_fish = sum(count, na.rm = TRUE),
+    fish_presence = as.integer(any(count > 0)),
+    .groups = "drop"
+  )
 
 locations_sf <- sf::st_as_sf(mini_locations_raw |> 
                                distinct(location_table_id, date, channel_location, .keep_all = T) |> 
                                na.omit(), coords = c('longitude', 'latitude')) |> 
-  select(location_table_id, channel_location, location, channel_type, date) |> 
-  mutate(location_table_id = paste0(date, " (location id: ", location_table_id, ")")) |> 
+  select(location_table_id, channel_location, location, channel_type) |> 
   mutate(color = colors_full[match(location, location)]) |> 
   mutate(channel_type_color = ifelse(channel_location == "LFC", "darkblue", "lightblue"))
 
-
+locs_with_fish <- locations_sf |> 
+  left_join(summary_fish_count) 
 ```
 
-### Map of habitat and redds
+## Map Visuals
 
-This map provides context into the habitat transect locations, identified by whether they are in the high flow "HFC" or low flow "LFC" part of the Feather River. Redds cluster around habitat transect locations but in no consistent manner and are only shown as far south as McFarland Riffle. 
+The following two maps provide context into the habitat transect locations, identified by whether they are in the high flow "HFC" or low flow "LFC" part of the Feather River. The first map's transect location size is dependent on number of fish counted at that transect over the course of the sampling period. The second map is filtered to only show transect locations that had fish recorded. 
+
+Qualitatively, redds cluster around habitat transect locations and sites where fish were recorded but without consistency.
+
+### Fish Count and Redd Locations
+
+Size of habitat transects (LFC/HFC) are based off number of fish recorded during the sampling period. 
 
 ```{r}
 redd_sf <- sf::st_as_sf(redd_data_with_redds |> 
@@ -120,18 +135,13 @@ redd_sf <- sf::st_as_sf(redd_data_with_redds |>
 leaflet() |>
   addProviderTiles(providers$Esri.WorldImagery, group = "Aerial Imagery") |>
   addProviderTiles(providers$OpenStreetMap, group = "Street Map") |>
-  addCircleMarkers(data = locations_sf, 
-                   # layerId = ~location, 
+  addCircleMarkers(data = locs_with_fish, 
                    color = ~channel_type_color,
-                   radius = 6,
+                   radius = ~rescale(n_fish, to = c(3, 20)),
                    fill = TRUE,
                    fillOpacity = 0.6,
-                   opacity = 0.6,
-                   popup = paste0("Location Name: ", locations_sf$location,
-                                  "<br>",
-                                  "Channel Type: ", locations_sf$channel_type)) |> 
+                   opacity = 0.6) |> 
   addCircleMarkers(data = redd_sf, 
-                   #layerId = ~redds,
                    color = 'darkred',
                    radius = 2,
                    fill = TRUE,
@@ -143,5 +153,41 @@ leaflet() |>
     options = layersControlOptions(collapsed = FALSE)
   ) |> 
   addLegend(colors = "darkred", labels = "Redd Locations") |> 
-  addLegend(colors = unique(locations_sf$channel_type_color), labels = unique(locations_sf$channel_location))
+  addLegend(title = "Habitat Transects",
+            colors = unique(locations_sf$channel_type_color), 
+            labels = unique(locations_sf$channel_location))
+```
+
+### Fish Presence and Redd Locations
+
+Habitat transects (LFC/HFC) are only shown for sites that had fish recorded. 
+
+```{r}
+
+leaflet() |>
+  addProviderTiles(providers$Esri.WorldImagery, group = "Aerial Imagery") |>
+  addProviderTiles(providers$OpenStreetMap, group = "Street Map") |>
+  addCircleMarkers(data = locs_with_fish |> 
+                     filter(fish_presence == 1), 
+                   color = ~channel_type_color,
+                   fill = TRUE,
+                   radius = 4,
+                   fillOpacity = 0.6,
+                   opacity = 0.6) |> 
+  addCircleMarkers(data = redd_sf, 
+                   color = 'darkred',
+                   radius = 2,
+                   fill = TRUE,
+                   fillOpacity = 0.2,
+                   opacity = 0.6) |>
+  addLayersControl(
+    baseGroups = c("Aerial Imagery", "Street Map"),
+    position = "topleft",
+    options = layersControlOptions(collapsed = FALSE)
+  ) |> 
+  addLegend(colors = "darkred", labels = "Redd Locations") |> 
+  addLegend(title = "Habitat Transects",
+            colors = unique(locations_sf$channel_type_color), 
+            labels = unique(locations_sf$channel_location))
+
 ```
