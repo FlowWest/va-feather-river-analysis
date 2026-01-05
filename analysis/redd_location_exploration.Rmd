@@ -26,15 +26,23 @@ Using mini snorkel data from the Feather River, make a visual to understand if h
 source(here::here("data-raw", "pull_from_edi.R"))
 ```
 
+#### Remove zero Redds
+Remove locations that have zero redd
+
+```{r}
+redd_data_with_redds <- redd_data |> 
+  filter(number_redds > 0)
+```
+
 
 ### Redd data over time 
 
 This visual represents the number of redds over time at each location. It helps provide context on which sites generally have redds and if they have redds consistently over time. 
 
 ```{r}
-redd_data |> 
+redd_data_with_redds |> 
   ggplot(aes(x = lubridate::year(date), y = location, fill = number_redds)) +
-  geom_tile(color = "white",  linewidth = 0.5)
+  geom_tile(color = "white",  linewidth = 0.5) 
 ```
 
 ```{r}
@@ -104,10 +112,10 @@ locations_sf <- sf::st_as_sf(mini_locations_raw |>
 
 ### Map of habitat and redds
 
-This map provides context into the habitat transect locations, identified by whether they are in the high flow "HFC" or low flow "LFC" part of the Feather River. Redds cluster around habitat transect locatins but in no consistent manner and are only shown as far south as McFarland Riffle. 
+This map provides context into the habitat transect locations, identified by whether they are in the high flow "HFC" or low flow "LFC" part of the Feather River. Redds cluster around habitat transect locations but in no consistent manner and are only shown as far south as McFarland Riffle. 
 
 ```{r}
-redd_sf <- sf::st_as_sf(redd_data |> 
+redd_sf <- sf::st_as_sf(redd_data_with_redds |> 
                           filter(!is.na(latitude)), coords = c('longitude', 'latitude'))
 leaflet() |>
   addProviderTiles(providers$Esri.WorldImagery, group = "Aerial Imagery") |>
