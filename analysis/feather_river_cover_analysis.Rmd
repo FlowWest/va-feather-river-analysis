@@ -8,6 +8,8 @@ output: html_document
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(sjPlot)
+library(pROC)
+library(glmmTMB)
 
 knitr::opts_chunk$set(
   echo = FALSE,
@@ -36,20 +38,10 @@ options(scipen=999)
 Develop a model that reflects the significance of cover, substrate,
 depth, and velocity on fish presence and absence.
 
-## Methodology
-
-**TODO: this section must be updated**
+## Analysis Overview
 
 Model was developed using [Feather River Mini Snorkel
-Data](https://github.com/FlowWest/feather-mini-snorkel). The data is
-structured with a numeric fish count variable that can be converted to a
-binary presence/absence. Logistic regression models were tested using
-the presence/absence as the response and cover, substrate, depth and
-velocity as the explanatory variables. However, due to the skewness of
-absence values, none of the developed models were well fit to the data.
-Based on a Gard 2024 paper (in-review), we decided to explore the use of
-hurdle models. Hurdle models excel with data types that are heavily
-skewed towards absence.
+Data](https://github.com/Healthy-Rivers-and-Landscapes-Science/feather-river/tree/main/edi-mini-snorkel). The dataset consists of numeric fish count observations that can also be expressed as a binary presence–absence response. Because the counts were highly zero-inflated (i.e., many observations with no fish detected), we initially evaluated a hurdle modeling approach following the framework described in Gard (2024, in review). Hurdle models are well suited for datasets dominated by absences, as they separately model the processes governing occurrence and abundance. In our case, the hurdle model provided reasonable performance for the presence–absence (zero) component but performed poorly for the count component, indicating that fish abundance could not be reliably predicted from the available covariates. Given this limitation, we shifted our focus to occurrence modeling using logistic regression. The strongest overall performance was obtained using a mixed-effects logistic regression that included a random intercept for transect sites nested within channel location (high-flow and low-flow channels), allowing us to account for spatial structure and repeated sampling within sites.
 
 ```{r}
 source(here::here("data-raw", "pull_from_edi.R"))
@@ -63,7 +55,7 @@ mini_snorkel_raw <- mini_fish_raw |>
 
 ```
 
-### Review Data
+## Review Data
 
 #### Outliers
 
@@ -207,16 +199,6 @@ increase in the predictor is associated with a 50% increase in the odds
 of having a zero count versus a positive count, assuming all other
 variables are held constant.
 
-<!-- #### The Binary Predictor Model -->
-
-<!-- This model utilizes binary cover and substrate variables. The results do not differ -->
-<!-- that much from using the absolute percentage variables for cover and substrate. -->
-
-<!-- - The count model has extremely high overdispersion. This is not surprising as -->
-<!-- most of the count variables are 1 with few observations greater than 1. -->
-<!-- - The intercept of the zero model is significant. This is not surprising as the  -->
-<!-- number of zeros is nearly 96%. -->
-
 ### Build Model 
 
 All cover variables were converted to presence/absence using a threshold of 20%. The following is the data structure of the model input data. 
@@ -276,7 +258,7 @@ plot_model(best_model_hurdle, title = "Figure 3. Hurdle Model Results Using Bina
 
 ```
 
-```{r}
+```{r include=FALSE}
 s <- summary(best_model_hurdle)
 
 # Extract components
@@ -343,7 +325,6 @@ pred_presence <- predict(
 )
 obs_presence <- as.integer(hurdle_data$count > 0)
 
-library(pROC)
 roc_presence <- roc(obs_presence, pred_presence)
 auc(roc_presence)
 
@@ -357,6 +338,8 @@ pred_class <- ifelse(pred_presence > 0.5, 1, 0)
 table(Predicted = pred_class, Observed = obs_presence)
 
 ```
+
+An AUC of 0.6505 detects from predictive capabilities in dectecting presence/absence using habitat variables but it is weak. However the confusion matrix implies poor predictability of presence which is likely due to the dataset being so heavily skewed towards absence. Because non-zero counts were low and weakly explained, abundance predictions were unreliable. 
 
 #### Evaluate the count component (abundance, conditional on presence)
 
@@ -387,30 +370,13 @@ abline(0,1,col="red")
 
 ```
 
-#### Evaluate the full “combined” prediction
-
-```{r}
-full_pred <- pred_presence * predict(
-  best_model_hurdle,
-  type = "response",
-  which = "count"
-)
-
-obs <- hurdle_data$count
-
-rmse_full <- sqrt(mean((obs - full_pred)^2))
-mae_full  <- mean(abs(obs - full_pred))
-r2_full   <- cor(obs, full_pred)^2
-c(rmse_full, mae_full, r2_full)
-
-
-```
+The count component of the hurdle model performed very poorly (RMSE = 150.6, MAE = 43.0, pseudo-R² = 0.02), indicating that the model explained virtually none of the variation in non-zero fish counts.
 
 ### Hurdle Model Discussion
 
 The hurdle model is performing okay (AUC of `r auc(roc_presence)`) for presence/absence but there is a poor predictive skill for the count variable likely due to many counts being low but with high variability. Because of this, we chose to model habitat associations for fish occurrence using a logistic model, which is most consistent with the information content of the data. 
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 hist(hurdle_data$count[hurdle_data$count>0])
 ```
 
@@ -436,10 +402,9 @@ summary(glm_presence)
 
 ```
 
-**Odds Ratio**
+<!-- **Odds Ratio** -->
 
-
-```{r}
+```{r eval=FALSE, include=FALSE}
 presence_table <- broom::tidy(glm_presence, conf.int = TRUE) |>
   mutate(
     odds_ratio = exp(estimate),
@@ -462,7 +427,6 @@ knitr::kable(presence_table)
 ### Performance
 
 ```{r}
-library(pROC)
 
 pred_prob <- predict(glm_presence, type = "response")
 obs <- log_reg_data$presence
@@ -483,15 +447,14 @@ table(Predicted = pred_class, Observed = obs)
 
 | Term                     | Meaning                              | Your value |
 | ------------------------ | ------------------------------------ | ---------: |
-| True Negatives (TN)  | correctly predicted absence          |       7991 |
+| True Negatives (TN)  | correctly predicted absence          |       8360 |
 | False Negatives (FN)| missed real presences                |        585 |
 | False Positives (FP) | predicted presence but none observed |          7 |
 | True Positives (TP)  | correctly predicted presence         |          5 |
 
-### Add random effect for HFC/LFC 
+### Add Random Effect 
 
 ```{r}
-library(glmmTMB)
 
 glmm_presence <- glmmTMB(
   presence ~ small_woody + depth + velocity + large_woody +
@@ -507,9 +470,9 @@ summary(glmm_presence)
 
 ```
 
-**Odds ratio**
+<!-- **Odds ratio** -->
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 or_table <- broom.mixed::tidy(glmm_presence, effects = "fixed", conf.int = TRUE) |>
   mutate(
     odds_ratio = exp(estimate),
@@ -529,8 +492,6 @@ knitr::kable(or_table)
 
 ```
 ```{r}
-library(pROC)
-
 pred_prob_glmm <- predict(glmm_presence, type = "response")
 obs <- log_reg_data$presence
 
@@ -576,10 +537,6 @@ ggplot(re_loc, aes(x = odds_ratio, y = unit)) +
 
 
 ```
-
-
-### Logistic Regression with Random Effect Discussion 
-
 ```{r}
 
 effects_df <- broom::tidy(glm_presence, conf.int = TRUE) |>
@@ -619,9 +576,11 @@ ggplot(effects_df, aes(x = odds_ratio, y = reorder(term, odds_ratio))) +
 ```
 
 
+### Logistic Regression with Random Effect Discussion 
+
 After controlling for local habitat characteristics, the probability of fish occurrence remained significantly structured by site, with LFC consistently supporting higher occupancy and HFC supporting lower occupancy than expected.
 
-Mixed-effects logistic models indicated strong spatial structuring of occurrence beyond the effects of local habitat covariates. Random-intercept estimates for channel units nested within locations showed that some sites exhibited consistently higher baseline probabilities of fish presence, whereas others were characterized by lower occurrence than expected. For example, hatchery ditch (LFC) and junkyard riffle (HFC) had markedly positive random effects (≈2–10× higher odds of presence than the global mean), while eye side channel (LFC) and weir riffle (LFC) showed substantially reduced occurrence (≈60–70% lower odds). These patterns suggest the influence of additional reach-scale or contextual factors not captured by measured microhabitat variables, such as connectivity, geomorphic setting, or broader hydraulic and thermal conditions.
+Mixed-effects logistic models indicated strong spatial structuring of occurrence beyond the effects of local habitat covariates. Random-intercept estimates for channel units nested within locations showed that some sites exhibited consistently higher baseline probabilities of fish presence, whereas others were characterized by lower occurrence than expected. For example, hatchery ditch (LFC) and junkyard riffle (HFC) had markedly positive random effects (~2–10× higher odds of presence than the global mean), while eye side channel (LFC) and weir riffle (LFC) showed substantially reduced occurrence (≈60–70% lower odds). These patterns suggest the influence of additional reach-scale or contextual factors not captured by measured microhabitat variables, such as connectivity, geomorphic setting, or broader hydraulic and thermal conditions.
 
 After controlling for other habitat attributes, fish were most likely to occur in units with riparian cover, undercut banks, woody structure, and boulder features, all of which provide refuge and hydraulic complexity. Depth and velocity played secondary roles, suggesting that microhabitat structure is a stronger driver of occurrence than hydraulic conditions alone. Some habitat types (e.g., cobble substrate, aquatic vegetation) did not show clear relationships with presence once other covariates were included.
 
