@@ -10,6 +10,7 @@ library(tidyverse)
 library(sjPlot)
 library(pROC)
 library(glmmTMB)
+library(sf)
 
 knitr::opts_chunk$set(
   echo = FALSE,
@@ -19,15 +20,25 @@ knitr::opts_chunk$set(
 
 theme_set(
   theme_minimal() +
-  theme(
-    plot.title = element_text(size = 11, face = "bold"),
-    axis.title.x = element_text(size = 14),
-    axis.title.y = element_text(size = 14)
-  )
+    theme(
+      plot.title = element_text(size = 11, face = "bold"),
+      axis.title.x = element_text(size = 14),
+      axis.title.y = element_text(size = 14)
+    )
 )
 
 
 custom_colors <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+colors_full <-  c("#9A8822", "#F5CDB4", "#F8AFA8", "#FDDDA0", "#74A089", #Royal 2
+                  "#899DA4", "#C93312", "#DC863B", # royal 1 (- 3)
+                  "#F1BB7B", "#FD6467", "#5B1A18", "#D67236",# Grand Budapest 1 (-4)
+                  "#D8B70A", "#02401B", "#A2A475", # Cavalcanti 1
+                  "#E6A0C4", "#C6CDF7", "#D8A499", "#7294D4", #Grand Budapest 2
+                  "#9986A5", "#EAD3BF", "#AA9486", "#B6854D", "#798E87", # Isle of dogs 2 altered slightly
+                  "#F3DF6C", "#CEAB07", "#D5D5D3", "#24281A", # Moonriese 1, 
+                  "#798E87", "#C27D38", "#CCC591", "#29211F", # moonrise 2
+                  "#85D4E3", "#F4B5BD", "#9C964A", "#CDC08C", "#FAD77B" ) # moonrise 3 
 
 options(scipen=999)
 
@@ -49,8 +60,8 @@ source(here::here("data-raw", "pull_from_edi.R"))
 mini_snorkel_raw <- mini_fish_raw |> 
   left_join(mini_locations_raw |> distinct()) |> 
   mutate(count = ifelse(is.na(count), 0, count),
-        fish_presence = as.factor(ifelse(count < 1, "0", "1")),
-        month = month(date)) |> 
+         fish_presence = as.factor(ifelse(count < 1, "0", "1")),
+         month = month(date)) |> 
   glimpse()
 
 ```
@@ -121,16 +132,106 @@ mini_snorkel_model_ready |>
   xlab("month") +
   ggtitle('Figure 2. Fish presence as a function of month and high flow/low flow channel') + 
   scale_fill_manual(values = custom_colors)
-  
+
 ```
+
+### Redd Location Exploration
+
+**Process**
+
+-   Source Feather River redd data from EDI
+-   Remove locations that have zero redds
+-   From Mini Snorkel data, extract location, channel type, channel location (High Flow vs. Low Flow), and number of fish counted
+
+```{r}
+# remove zero redds
+redd_data_with_redds <- redd_data |> 
+  filter(number_redds > 0)
+```
+
+**Redd data over time**
+
+This visual represents the number of redds over time at each location. It helps provide context on which sites generally have redds and if they have redds consistently over time. The Mini Snorkel data was collected from `r min(mini_snorkel_raw$date)` to `r max(mini_snorkel_raw$date)` so it does not align with the redd data. 
+
+```{r}
+redd_data_with_redds |> 
+  ggplot(aes(x = lubridate::year(date), y = location, fill = number_redds)) +
+  geom_tile(color = "white",  linewidth = 0.5) + 
+  xlab("Year")
+```
+
+Combine redd data with mini snorkel to see if redds are a spatial indicator or spawning potential/habitat quality. 
+
+```{r}
+redd_data_by_location <- redd_data |> 
+  group_by(longitude, latitude, location) |> 
+  summarise(n_redds = sum(number_redds),
+            n_fish_on_redds = sum(number_salmon)) |>  # TODO: double check this variable is interpreted correctly. On redd or near redd?
+  mutate(n_fish_on_redds = replace_na(n_fish_on_redds, 0)) |> 
+  filter(!is.na(longitude)) |> 
+  sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
+
+redd_data_by_location |> 
+  ggplot(aes(x = location, y = n_redds)) +
+  geom_col() +
+  coord_flip()
+
+mini_sf <- mini_snorkel_model_ready |> 
+  filter(!is.na(longitude)) |> 
+  sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326) |> 
+  glimpse()
+```
+
+Find the nearest transect location from the Mini Snorkel data to each redd 
+
+TODO: QC this
+
+```{r}
+dist_to_nearest <- st_distance(
+  redd_data_by_location,
+  mini_sf[st_nearest_feature(redd_data_by_location, mini_sf), ],
+  by_element = TRUE
+)
+
+redd_near <- redd_data_by_location |>
+  mutate(dist_to_nearest = as.numeric(dist_to_nearest)) |> 
+  filter(dist_to_nearest <= 50)
+
+redd_near_with_snorkel <- st_join(
+  redd_near |> select(-location),
+  mini_sf,
+  join = st_nearest_feature
+)
+
+redd_data_by_location |>
+  mutate(dist_to_nearest = as.numeric(dist_to_nearest)) |> 
+  ggplot(aes(x = dist_to_nearest)) +
+  geom_histogram(binwidth = 5, boundary = 0) +
+  geom_vline(xintercept = 50, linetype = 2, color = "red") +
+  labs(
+    title = "QC: distribution of nearest-neighbor distances"
+  ) +
+  theme_minimal(base_size = 13)
+
+redd_summary <- redd_near_with_snorkel |>
+  st_drop_geometry() |>
+  group_by(location) |>
+  summarise(
+    redd_total = sum(n_redds),                    
+    redd_presence = as.integer(redd_total > 0)
+  )
+
+```
+
 
 ### Variables of Interest
 
 The variables of interest include cover, substrate, velocity and depth variables
-known to be important for salmon rearing habitat.
+known to be important for salmon rearing habitat. We are also including the number or redds nearby, when applicable. 
 
 - Velocity - numeric
 - Depth - numeric
+- Number or Redds - numeric 
 
 Substrate and cover variables are measured as percentages which can also be modeled
 as binary by establishing a threshold percentage. Overhanging vegetation was measured
@@ -209,10 +310,10 @@ percent_threshold <- 20
 # use a hurdle model (Gard 2024); 
 # pre-processing - all numeric values must be rounded to whole numbers
 hurdle_data <- mini_snorkel_model_ready |>
-    select(count, location, channel_location, depth, velocity, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank", month, fl_mm) |>
+  select(count, location, channel_location, depth, velocity, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank", month, fl_mm) |>
   # create new cover variables, based off Gard 2023
   mutate(small_woody = percent_small_woody_cover_inchannel,
-        large_woody = percent_large_woody_cover_inchannel,
+         large_woody = percent_large_woody_cover_inchannel,
          boulder_substrate = percent_boulder_substrate,
          cobble_substrate = percent_cobble_substrate, 
          undercut_bank = percent_undercut_bank, 
@@ -233,6 +334,11 @@ hurdle_data <- mini_snorkel_model_ready |>
   mutate(fl_mm = ifelse(is.na(fl_mm), 0, fl_mm)) |> 
   na.omit() |> 
   select(-fl_mm) |> 
+  left_join(redd_summary) |> 
+  mutate(
+    redd_total = replace_na(redd_total, 0),
+    redd_presence = replace_na(redd_presence, 0)
+  ) |> 
   glimpse()
 
 ```
@@ -240,7 +346,7 @@ hurdle_data <- mini_snorkel_model_ready |>
 ### Results summary
 
 ```{r}
-hurdle_model <- pscl::hurdle(count ~ small_woody + depth + velocity + large_woody + aquatic_veg + overhanging_veg + cobble_substrate + boulder_substrate + undercut_bank, data = hurdle_data, dist = "negbin") 
+hurdle_model <- pscl::hurdle(count ~ small_woody + depth + velocity + large_woody + aquatic_veg + overhanging_veg + cobble_substrate + boulder_substrate + undercut_bank + redd_total + redd_presence, data = hurdle_data, dist = "negbin") 
 # Negative Binomial Distribution: The Negative Binomial distribution is more flexible than the Poisson distribution and is used when the variance of the counts is greater than the mean, which is known as overdispersion. The Negative Binomial model allows for the variance to be larger than the mean, which is common in count data where there is extra variability beyond what is expected from a Poisson distribution.
 
 # zero inflated models are capable of dealing with excess zero counts
@@ -288,16 +394,16 @@ zero_coef <- as.data.frame(s$coefficients$zero) |>
 effect_table <- bind_rows(zero_coef, count_coef) |>
   mutate(
     term = recode(term,
-      "(Intercept)" = "Intercept",
-      small_woody = "Small woody debris",
-      large_woody = "Large woody debris",
-      overhanging_veg = "Overhanging vegetation",
-      aquatic_veg = "Aquatic vegetation",
-      cobble_substrate = "Cobble substrate",
-      boulder_substrate = "Boulder substrate",
-      undercut_bank = "Undercut bank",
-      depth = "Depth",
-      velocity = "Velocity"
+                  "(Intercept)" = "Intercept",
+                  small_woody = "Small woody debris",
+                  large_woody = "Large woody debris",
+                  overhanging_veg = "Overhanging vegetation",
+                  aquatic_veg = "Aquatic vegetation",
+                  cobble_substrate = "Cobble substrate",
+                  boulder_substrate = "Boulder substrate",
+                  undercut_bank = "Undercut bank",
+                  depth = "Depth",
+                  velocity = "Velocity"
     ),
     exp_effect = round(exp_effect, 2),
     Estimate   = round(Estimate, 3),
@@ -339,7 +445,7 @@ table(Predicted = pred_class, Observed = obs_presence)
 
 ```
 
-An AUC of 0.6505 detects from predictive capabilities in dectecting presence/absence using habitat variables but it is weak. However the confusion matrix implies poor predictability of presence which is likely due to the dataset being so heavily skewed towards absence. Because non-zero counts were low and weakly explained, abundance predictions were unreliable. 
+An AUC of `r auc(roc_presence)` detects from predictive capabilities in dectecting presence/absence using habitat variables but it is weak. However the confusion matrix implies poor predictability of presence which is likely due to the dataset being so heavily skewed towards absence. Because non-zero counts were low and weakly explained, abundance predictions were unreliable. 
 
 #### Evaluate the count component (abundance, conditional on presence)
 
@@ -393,7 +499,7 @@ log_reg_data <- hurdle_data |>
 glm_presence <- glm(
   presence ~ small_woody + depth + velocity + large_woody +
     aquatic_veg + overhanging_veg + cobble_substrate +
-    boulder_substrate + undercut_bank,
+    boulder_substrate + undercut_bank + redd_total + redd_presence,
   data = log_reg_data,
   family = binomial(link = "logit")
 )
@@ -435,7 +541,7 @@ roc_glm <- roc(obs, pred_prob)
 auc(roc_glm)   # 0.7 vs. 0.64 of the hurdle model; slightly better performing 
 ```
 
-AUC of 0.70 means The habitat variables explain some presence–absence structure, but there is still a lot of overlap/noise in the data.
+AUC of `r auc(roc_glm)` means The habitat variables explain some presence–absence structure, but there is still a lot of overlap/noise in the data.
 
 ```{r include=FALSE}
 # confusion matrix 
@@ -445,12 +551,12 @@ table(Predicted = pred_class, Observed = obs)
 
 **Confusion Matrix**
 
-| Term                     | Meaning                              | Your value |
-| ------------------------ | ------------------------------------ | ---------: |
-| True Negatives (TN)  | correctly predicted absence          |       8360 |
-| False Negatives (FN)| missed real presences                |        585 |
-| False Positives (FP) | predicted presence but none observed |          7 |
-| True Positives (TP)  | correctly predicted presence         |          5 |
+| Term                     | Meaning                              |
+| ------------------------ | ------------------------------------ | 
+| True Negatives (TN)  | correctly predicted absence          |       
+| False Negatives (FN)| missed real presences                |        
+| False Positives (FP) | predicted presence but none observed |         
+| True Positives (TP)  | correctly predicted presence         |         
 
 ### Add Random Effect 
 
@@ -459,7 +565,7 @@ table(Predicted = pred_class, Observed = obs)
 glmm_presence <- glmmTMB(
   presence ~ small_woody + depth + velocity + large_woody +
     aquatic_veg + overhanging_veg + cobble_substrate +
-    boulder_substrate + undercut_bank +
+    boulder_substrate + undercut_bank + redd_total + redd_presence +
     (1 | channel_location/location),                     
   data = log_reg_data,
   family = binomial(link = "logit")
@@ -533,7 +639,7 @@ ggplot(re_loc, aes(x = odds_ratio, y = unit)) +
   ) +
   scale_x_log10() +
   theme_minimal(base_size = 13)
-  
+
 
 
 ```
@@ -546,15 +652,17 @@ effects_df <- broom::tidy(glm_presence, conf.int = TRUE) |>
     or_low = exp(conf.low),
     or_high = exp(conf.high),
     term = recode(term,
-      small_woody = "Small woody debris",
-      large_woody = "Large woody debris",
-      overhanging_veg = "Overhanging vegetation",
-      aquatic_veg = "Aquatic vegetation",
-      cobble_substrate = "Cobble substrate",
-      boulder_substrate = "Boulder substrate",
-      undercut_bank = "Undercut bank",
-      depth = "Depth",
-      velocity = "Velocity"
+                  small_woody = "Small woody debris",
+                  large_woody = "Large woody debris",
+                  overhanging_veg = "Overhanging vegetation",
+                  aquatic_veg = "Aquatic vegetation",
+                  cobble_substrate = "Cobble substrate",
+                  boulder_substrate = "Boulder substrate",
+                  undercut_bank = "Undercut bank",
+                  depth = "Depth",
+                  velocity = "Velocity",
+                  redd_total = "Total Number or Redds Nearby",
+                  redd_presence = "Redds Nearby"
     )
   )
 
