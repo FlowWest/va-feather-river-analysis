@@ -3,6 +3,9 @@ title: "Feather River - Mini Snorkel Data Modeling and Analysis"
 author: "Maddee Wiggins (FlowWest)"
 date: "`r Sys.Date()`"
 output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
 ---
 
 ```{r setup, include=FALSE}
@@ -11,6 +14,8 @@ library(sjPlot)
 library(pROC)
 library(glmmTMB)
 library(sf)
+library(leaflet)
+library(scales)
 
 knitr::opts_chunk$set(
   echo = FALSE,
@@ -52,7 +57,23 @@ depth, and velocity on fish presence and absence.
 ## Analysis Overview
 
 Model was developed using [Feather River Mini Snorkel
-Data](https://github.com/Healthy-Rivers-and-Landscapes-Science/feather-river/tree/main/edi-mini-snorkel). The dataset consists of numeric fish count observations that can also be expressed as a binary presence–absence response. Because the counts were highly zero-inflated (i.e., many observations with no fish detected), we initially evaluated a hurdle modeling approach following the framework described in Gard (2024, in review). Hurdle models are well suited for datasets dominated by absences, as they separately model the processes governing occurrence and abundance. In our case, the hurdle model provided reasonable performance for the presence–absence (zero) component but performed poorly for the count component, indicating that fish abundance could not be reliably predicted from the available covariates. Given this limitation, we shifted our focus to occurrence modeling using logistic regression. The strongest overall performance was obtained using a mixed-effects logistic regression that included a random intercept for transect sites nested within channel location (high-flow and low-flow channels), allowing us to account for spatial structure and repeated sampling within sites.
+Data](https://github.com/Healthy-Rivers-and-Landscapes-Science/feather-river/tree/main/edi-mini-snorkel).
+The dataset consists of numeric fish count observations that can also be
+expressed as a binary presence–absence response. Because the counts were
+highly zero-inflated (i.e., many observations with no fish detected), we
+initially evaluated a hurdle modeling approach following the framework
+described in Gard (2024, in review). Hurdle models are well suited for
+datasets dominated by absences, as they separately model the processes
+governing occurrence and abundance. In our case, the hurdle model
+provided reasonable performance for the presence–absence (zero)
+component but performed poorly for the count component, indicating that
+fish abundance could not be reliably predicted from the available
+covariates. Given this limitation, we shifted our focus to occurrence
+modeling using logistic regression. The strongest overall performance
+was obtained using a mixed-effects logistic regression that included a
+random intercept for transect sites nested within channel location
+(high-flow and low-flow channels), allowing us to account for spatial
+structure and repeated sampling within sites.
 
 ```{r}
 source(here::here("data-raw", "pull_from_edi.R"))
@@ -70,9 +91,9 @@ mini_snorkel_raw <- mini_fish_raw |>
 
 #### Outliers
 
-`count` outliers exist, in the high flow and the low
-flow channel, however their removal did not impact the model
-results so they were kept in the dataset.
+`count` outliers exist, in the high flow and the low flow channel,
+however their removal did not impact the model results so they were kept
+in the dataset.
 
 ```{r eval=FALSE, include=FALSE}
 # Keeping this figure out of analysis but keeping for future
@@ -83,8 +104,8 @@ mini_snorkel_raw |>
   ggtitle("Outliers of fish count")
 ```
 
-We thought that by removing values greater than 250 this would limit overdispersion
-in the count model, however, it did not. 
+We thought that by removing values greater than 250 this would limit
+overdispersion in the count model, however, it did not.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 mini_snorkel_raw |> 
@@ -101,12 +122,14 @@ mini_snorkel_model_ready <- mini_snorkel_raw
 ### High Flow vs. Low Flow Channel
 
 Table 1 and figure 2 explore whether fish presence was impacted by the
-high or low flow channels. Overall there are similar numbers of 
-fish present in the high flow channel compared to the low flow channel
-(table 1). There are more fish present in the high flow channel in March but they
-move quickly downstream. Fish remain in the low flow channel for much longer time (figure 2).
+high or low flow channels. Overall there are similar numbers of fish
+present in the high flow channel compared to the low flow channel (table
+1). There are more fish present in the high flow channel in March but
+they move quickly downstream. Fish remain in the low flow channel for
+much longer time (figure 2).
 
-do we have the same amount of sampling plots in the high flow vs. low flow? 
+do we have the same amount of sampling plots in the high flow vs. low
+flow?
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 
@@ -141,7 +164,8 @@ mini_snorkel_model_ready |>
 
 -   Source Feather River redd data from EDI
 -   Remove locations that have zero redds
--   From Mini Snorkel data, extract location, channel type, channel location (High Flow vs. Low Flow), and number of fish counted
+-   From Mini Snorkel data, extract location, channel type, channel
+    location (High Flow vs. Low Flow), and number of fish counted
 
 ```{r}
 # remove zero redds
@@ -151,7 +175,11 @@ redd_data_with_redds <- redd_data |>
 
 **Redd data over time**
 
-This visual represents the number of redds over time at each location. It helps provide context on which sites generally have redds and if they have redds consistently over time. The Mini Snorkel data was collected from `r min(mini_snorkel_raw$date)` to `r max(mini_snorkel_raw$date)` so it does not align with the redd data. 
+This visual represents the number of redds over time at each location.
+It helps provide context on which sites generally have redds and if they
+have redds consistently over time. The Mini Snorkel data was collected
+from `r min(mini_snorkel_raw$date)` to `r max(mini_snorkel_raw$date)` so
+it does not align with the redd data.
 
 ```{r}
 redd_data_with_redds |> 
@@ -160,7 +188,8 @@ redd_data_with_redds |>
   xlab("Year")
 ```
 
-Combine redd data with mini snorkel to see if redds are a spatial indicator or spawning potential/habitat quality. 
+Combine redd data with mini snorkel to see if redds are a spatial
+indicator or spawning potential/habitat quality.
 
 ```{r}
 redd_data_by_location <- redd_data |> 
@@ -182,7 +211,8 @@ mini_sf <- mini_snorkel_model_ready |>
   glimpse()
 ```
 
-Find the nearest transect location from the Mini Snorkel data to each redd 
+Find the nearest transect location from the Mini Snorkel data to each
+redd
 
 TODO: QC this
 
@@ -220,41 +250,96 @@ redd_summary <- redd_near_with_snorkel |>
     redd_total = sum(n_redds),                    
     redd_presence = as.integer(redd_total > 0)
   )
+```
+
+```{r}
+
+locations_sf <- sf::st_as_sf(mini_locations_raw |> 
+                               distinct(location_table_id, date, channel_location, .keep_all = T) |> 
+                               na.omit(), 
+                             coords = c('longitude', 'latitude')) |> 
+  select(location_table_id, location, channel_type, date) |> 
+  mutate(location_table_id = paste0(date, " (location id: ", location_table_id, ")")) |> 
+  mutate(color = colors_full[match(location, location)]) |> 
+  group_by(location) |> 
+  slice(1) |> # This is a bit of a workaround since there are multiple lat/longs for reach location that are near eachother. Since this is just for a visual, I think it's fine. 
+  ungroup()
+
+redd_summary_sf <- redd_summary |> 
+  left_join(locations_sf) |> 
+  select(location, redd_presence, redd_total, geometry) |> 
+  distinct() |> 
+  sf::st_as_sf(sf_column_name = "geometry", crs = 4326)
+
+
+
+leaflet() |>
+  addProviderTiles(providers$Esri.WorldImagery, group = "Aerial Imagery") |>
+  addProviderTiles(providers$OpenStreetMap, group = "Street Map") |>
+   addCircleMarkers(data = locations_sf, 
+                     layerId = ~location, 
+                     color = ~color,
+                     radius = 6,
+                     fill = TRUE,
+                     fillOpacity = 0.2,
+                     opacity = 0.6,
+                     popup = paste0("Location Name: ", locations_sf$location,
+                                    "<br>",
+                                    "Channel Type: ", locations_sf$channel_type)) |> 
+  addCircleMarkers(data = redd_summary_sf, 
+                   color = "darkred",
+                   radius = ~rescale(redd_total, to = c(3, 20)),
+                   fill = TRUE,
+                   fillOpacity = 1,
+                   opacity = 1, 
+                   popup = paste0("Location Name: ", redd_summary_sf$location,
+                                    "<br>",
+                                    "N Redds: ", redd_summary_sf$redd_total)) |> 
+   
+  addLayersControl(
+    baseGroups = c("Aerial Imagery", "Street Map"),
+    position = "topleft",
+    options = layersControlOptions(collapsed = FALSE)
+  ) |> 
+  addLegend(colors = "darkred", labels = "Redd Locations") 
 
 ```
 
-
 ### Variables of Interest
 
-The variables of interest include cover, substrate, velocity and depth variables
-known to be important for salmon rearing habitat. We are also including the number or redds nearby, when applicable. 
+The variables of interest include cover, substrate, velocity and depth
+variables known to be important for salmon rearing habitat. We are also
+including the number or redds nearby, when applicable.
 
-- Velocity - numeric
-- Depth - numeric
-- Number or Redds - numeric 
+-   Velocity - numeric
+-   Depth - numeric
+-   Number or Redds - numeric
 
-Substrate and cover variables are measured as percentages which can also be modeled
-as binary by establishing a threshold percentage. Overhanging vegetation was measured
-at 1/2 meter overhead and more than 1/2 meter overhead. These categories were combined
-for simplicity and for comparison with other studies, such as those by Mark Gard.
+Substrate and cover variables are measured as percentages which can also
+be modeled as binary by establishing a threshold percentage. Overhanging
+vegetation was measured at 1/2 meter overhead and more than 1/2 meter
+overhead. These categories were combined for simplicity and for
+comparison with other studies, such as those by Mark Gard.
 
-- Undercut bank
-- Aquatic vegetation
-- Overhanging vegetation
-- Small woody cover
-- Large woody cover
-- Boulder substrate
-- Cobble substrate
+-   Undercut bank
+-   Aquatic vegetation
+-   Overhanging vegetation
+-   Small woody cover
+-   Large woody cover
+-   Boulder substrate
+-   Cobble substrate
 
-Data was collected between March through August, however, outmigration affects
-fish presence later in the season. We do not include month as it is a strong predictor
-of fish presence. The analysis could be limited to focus on the month with most
-observations (March), though including all months also makes sense if seeking to 
-determine variables that are stable throughout time.
+Data was collected between March through August, however, outmigration
+affects fish presence later in the season. We do not include month as it
+is a strong predictor of fish presence. The analysis could be limited to
+focus on the month with most observations (March), though including all
+months also makes sense if seeking to determine variables that are
+stable throughout time.
 
-The conditions in the HFC and LFC are quite different and some initial exploration
-was done to explore this by creating separate models for the LFC and HFC. The results
-did not differ significantly. Spatial nuances may best be explored at the site level.
+The conditions in the HFC and LFC are quite different and some initial
+exploration was done to explore this by creating separate models for the
+LFC and HFC. The results did not differ significantly. Spatial nuances
+may best be explored at the site level.
 
 ## Hurdle Model Approach
 
@@ -262,9 +347,9 @@ did not differ significantly. Spatial nuances may best be explored at the site l
 
 A hurdle model was used in Gard 2024 (in-review) to test for the effects
 of cover and habitat type on the total abundance of Chinook salmon at
-both site and cell level. Here we explore the use oif a hurdle model to help
-understand the influence of velocity, depth, and cover on fish count and
-presence/absence.
+both site and cell level. Here we explore the use oif a hurdle model to
+help understand the influence of velocity, depth, and cover on fish
+count and presence/absence.
 
 **Hurdle Models**
 
@@ -300,9 +385,10 @@ increase in the predictor is associated with a 50% increase in the odds
 of having a zero count versus a positive count, assuming all other
 variables are held constant.
 
-### Build Model 
+### Build Model
 
-All cover variables were converted to presence/absence using a threshold of 20%. The following is the data structure of the model input data. 
+All cover variables were converted to presence/absence using a threshold
+of 20%. The following is the data structure of the model input data.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 percent_threshold <- 20
@@ -356,7 +442,6 @@ hurdle_model <- pscl::hurdle(count ~ small_woody + depth + velocity + large_wood
 best_model_hurdle <- MASS::stepAIC(hurdle_model)
 summary(best_model_hurdle)
 ```
-
 
 ```{r}
 plot_model(best_model_hurdle, title = "Figure 3. Hurdle Model Results Using Binary Presence/Absence for Cover and Substrate",  wrap.title = 50) + 
@@ -420,9 +505,10 @@ knitr::kable(effect_table, align = "lcccc")
 
 ```
 
-### Model Performance 
+### Model Performance
 
 #### Evaluate the presence / absence component (classification)
+
 ```{r}
 pred_presence <- predict(
   best_model_hurdle,
@@ -445,11 +531,16 @@ table(Predicted = pred_class, Observed = obs_presence)
 
 ```
 
-An AUC of `r auc(roc_presence)` detects from predictive capabilities in dectecting presence/absence using habitat variables but it is weak. However the confusion matrix implies poor predictability of presence which is likely due to the dataset being so heavily skewed towards absence. Because non-zero counts were low and weakly explained, abundance predictions were unreliable. 
+An AUC of `r auc(roc_presence)` detects from predictive capabilities in
+dectecting presence/absence using habitat variables but it is weak.
+However the confusion matrix implies poor predictability of presence
+which is likely due to the dataset being so heavily skewed towards
+absence. Because non-zero counts were low and weakly explained,
+abundance predictions were unreliable.
 
 #### Evaluate the count component (abundance, conditional on presence)
 
-Only evaluate sites where count > 0.
+Only evaluate sites where count \> 0.
 
 ```{r}
 present_idx <- hurdle_data$count > 0
@@ -476,24 +567,31 @@ abline(0,1,col="red")
 
 ```
 
-The count component of the hurdle model performed very poorly (RMSE = 150.6, MAE = 43.0, pseudo-R² = 0.02), indicating that the model explained virtually none of the variation in non-zero fish counts.
+The count component of the hurdle model performed very poorly (RMSE =
+150.6, MAE = 43.0, pseudo-R² = 0.02), indicating that the model
+explained virtually none of the variation in non-zero fish counts.
 
 ### Hurdle Model Discussion
 
-The hurdle model is performing okay (AUC of `r auc(roc_presence)`) for presence/absence but there is a poor predictive skill for the count variable likely due to many counts being low but with high variability. Because of this, we chose to model habitat associations for fish occurrence using a logistic model, which is most consistent with the information content of the data. 
+The hurdle model is performing okay (AUC of `r auc(roc_presence)`) for
+presence/absence but there is a poor predictive skill for the count
+variable likely due to many counts being low but with high variability.
+Because of this, we chose to model habitat associations for fish
+occurrence using a logistic model, which is most consistent with the
+information content of the data.
 
 ```{r eval=FALSE, include=FALSE}
 hist(hurdle_data$count[hurdle_data$count>0])
 ```
 
-## Logistic Regression Approach 
+## Logistic Regression Approach
 
 ```{r}
 log_reg_data <- hurdle_data |> 
   mutate(presence = as.integer(count > 0))
 ```
 
-### Build Logistic Regression Model 
+### Build Logistic Regression Model
 
 ```{r}
 glm_presence <- glm(
@@ -538,12 +636,17 @@ pred_prob <- predict(glm_presence, type = "response")
 obs <- log_reg_data$presence
 
 roc_glm <- roc(obs, pred_prob)
-auc(roc_glm)   # 0.7 vs. 0.64 of the hurdle model; slightly better performing 
+auc(roc_glm)   # slightly better performing 
+
+# pred_class <- ifelse(pred_presence > 0.5, 1, 0)
+# table(Predicted = pred_class, Observed = obs_presence)
 ```
 
-AUC of `r auc(roc_glm)` means The habitat variables explain some presence–absence structure, but there is still a lot of overlap/noise in the data.
+AUC of `r auc(roc_glm)` means The habitat variables explain some
+presence–absence structure, but there is still a lot of overlap/noise in
+the data.
 
-```{r include=FALSE}
+```{r echo=FALSE}
 # confusion matrix 
 pred_class <- ifelse(pred_prob > 0.5, 1, 0)
 table(Predicted = pred_class, Observed = obs)
@@ -551,21 +654,21 @@ table(Predicted = pred_class, Observed = obs)
 
 **Confusion Matrix**
 
-| Term                     | Meaning                              |
-| ------------------------ | ------------------------------------ | 
-| True Negatives (TN)  | correctly predicted absence          |       
-| False Negatives (FN)| missed real presences                |        
-| False Positives (FP) | predicted presence but none observed |         
-| True Positives (TP)  | correctly predicted presence         |         
+| Term                 | Meaning                              |
+|----------------------|--------------------------------------|
+| True Negatives (TN)  | correctly predicted absence          |
+| False Negatives (FN) | missed real presences                |
+| False Positives (FP) | predicted presence but none observed |
+| True Positives (TP)  | correctly predicted presence         |
 
-### Add Random Effect 
+### Add Random Effect
 
 ```{r}
 
 glmm_presence <- glmmTMB(
   presence ~ small_woody + depth + velocity + large_woody +
     aquatic_veg + overhanging_veg + cobble_substrate +
-    boulder_substrate + undercut_bank + redd_total + redd_presence +
+    boulder_substrate + undercut_bank + redd_total + redd_presence + 
     (1 | channel_location/location),                     
   data = log_reg_data,
   family = binomial(link = "logit")
@@ -597,6 +700,7 @@ or_table <- broom.mixed::tidy(glmm_presence, effects = "fixed", conf.int = TRUE)
 knitr::kable(or_table)
 
 ```
+
 ```{r}
 pred_prob_glmm <- predict(glmm_presence, type = "response")
 obs <- log_reg_data$presence
@@ -612,6 +716,13 @@ ranef(glmm_presence)$cond$channel_location |>
   as.data.frame()
 # Large variation → occupancy differs strongly by site beyond measured habitat.
 
+
+```
+
+```{r echo=FALSE}
+# confusion matrix 
+pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+table(Predicted = pred_class, Observed = obs)
 ```
 
 **Plots**
@@ -643,6 +754,7 @@ ggplot(re_loc, aes(x = odds_ratio, y = unit)) +
 
 
 ```
+
 ```{r}
 
 effects_df <- broom::tidy(glm_presence, conf.int = TRUE) |>
@@ -683,17 +795,36 @@ ggplot(effects_df, aes(x = odds_ratio, y = reorder(term, odds_ratio))) +
 
 ```
 
+### Logistic Regression with Random Effect Discussion
 
-### Logistic Regression with Random Effect Discussion 
+After controlling for local habitat characteristics, the probability of
+fish occurrence remained significantly structured by site, with LFC
+consistently supporting higher occupancy and HFC supporting lower
+occupancy than expected.
 
-After controlling for local habitat characteristics, the probability of fish occurrence remained significantly structured by site, with LFC consistently supporting higher occupancy and HFC supporting lower occupancy than expected.
+Mixed-effects logistic models indicated strong spatial structuring of
+occurrence beyond the effects of local habitat covariates.
+Random-intercept estimates for channel units nested within locations
+showed that some sites exhibited consistently higher baseline
+probabilities of fish presence, whereas others were characterized by
+lower occurrence than expected. For example, hatchery ditch (LFC) and
+junkyard riffle (HFC) had markedly positive random effects (\~2–10×
+higher odds of presence than the global mean), while eye side channel
+(LFC) and weir riffle (LFC) showed substantially reduced occurrence
+(≈60–70% lower odds). These patterns suggest the influence of additional
+reach-scale or contextual factors not captured by measured microhabitat
+variables, such as connectivity, geomorphic setting, or broader
+hydraulic and thermal conditions.
 
-Mixed-effects logistic models indicated strong spatial structuring of occurrence beyond the effects of local habitat covariates. Random-intercept estimates for channel units nested within locations showed that some sites exhibited consistently higher baseline probabilities of fish presence, whereas others were characterized by lower occurrence than expected. For example, hatchery ditch (LFC) and junkyard riffle (HFC) had markedly positive random effects (~2–10× higher odds of presence than the global mean), while eye side channel (LFC) and weir riffle (LFC) showed substantially reduced occurrence (≈60–70% lower odds). These patterns suggest the influence of additional reach-scale or contextual factors not captured by measured microhabitat variables, such as connectivity, geomorphic setting, or broader hydraulic and thermal conditions.
-
-After controlling for other habitat attributes, fish were most likely to occur in units with riparian cover, undercut banks, woody structure, and boulder features, all of which provide refuge and hydraulic complexity. Depth and velocity played secondary roles, suggesting that microhabitat structure is a stronger driver of occurrence than hydraulic conditions alone. Some habitat types (e.g., cobble substrate, aquatic vegetation) did not show clear relationships with presence once other covariates were included.
-
+After controlling for other habitat attributes, fish were most likely to
+occur in units with riparian cover, undercut banks, woody structure, and
+boulder features, all of which provide refuge and hydraulic complexity.
+Depth and velocity played secondary roles, suggesting that microhabitat
+structure is a stronger driver of occurrence than hydraulic conditions
+alone. Some habitat types (e.g., cobble substrate, aquatic vegetation)
+did not show clear relationships with presence once other covariates
+were included.
 
 ```{r}
 knitr::knit_exit()
 ```
-
