@@ -693,6 +693,35 @@ table(Predicted = pred_class, Observed = obs)
 
 ### Logistic Regression with Random Effect
 
+This mixed-effects logistic model estimates the probability of fish presence as a function of local habitat features and spawning context, while accounting for consistent differences among sites and channel types through random effects. 
+
+We first fit a mixed-effects logistic regression that included a random effect for channel type (high-flow versus low-flow channels). We then extended this structure by adding a nested random effect for transect sites within each channel type. The nested model showed slightly improved performance based on AUC, indicating better overall discrimination between presence and absence. However, the confusion matrices for the two models were identical, suggesting that while the nested random effects improved probabilistic ranking of sites, they did not change binary classification outcomes at the chosen threshold.
+
+```{r}
+
+glmm_presence_location <- glmmTMB(
+  presence ~ small_woody + depth + velocity + large_woody +
+    aquatic_veg + overhanging_veg + cobble_substrate +
+    boulder_substrate + undercut_bank + redd_total + redd_presence + 
+    (1 | location),                     
+  data = log_reg_data,
+  family = binomial(link = "logit")
+)
+
+summary(glmm_presence_location)
+
+pred_prob_glmm_loc <- predict(glmm_presence_location, type = "response")
+obs <- log_reg_data$presence
+
+roc_glmm_loc <- roc(obs, pred_prob_glmm_loc)
+auc(roc_glmm_loc) 
+
+# confusion matrix 
+pred_class_loc <- ifelse(pred_prob_glmm_loc > 0.5, 1, 0)
+table(Predicted = pred_class_loc, Observed = obs)
+
+```
+
 ```{r}
 
 glmm_presence <- glmmTMB(
@@ -705,7 +734,6 @@ glmm_presence <- glmmTMB(
 )
 
 summary(glmm_presence)
-
 
 ```
 
