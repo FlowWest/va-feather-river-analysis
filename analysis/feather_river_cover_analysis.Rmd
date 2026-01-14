@@ -321,6 +321,67 @@ leaflet() |>
 
 ```
 
+### Outmigration Analysis  
+
+**Goal**
+
+Understand timing and patterns of juvenile outmigration on the Feather
+River and compare to timing and density of fish observations in the mini
+snorkel dataset.
+
+**Insights**
+
+-   The majority of catch in RSTs on the Feather River (both LFC and
+    HFC) have passed through by March (\~80%)
+-   There are small differences in cumulative catch curves between the
+    HFC and LFC indicating that outmigration is not affecting these
+    sites differently
+-   The fish that remain in the Feather River after March and into May
+    and June are likely larger ( \> 50mm) which aligns with the fork
+    length distributions by month in the habitat data
+
+```{r}
+colors_small <-  c("#9A8822", "#F5CDB4", "#F8AFA8", "#FDDDA0", "#74A089", #Royal 2
+                   "#899DA4", "#C93312", "#DC863B" # royal 1 (- 3)
+)
+# Use data from SRJPEdata for the Feather River
+feather_rst <- SRJPEdata::rst_catch |> filter(stream == "feather river")
+feather_rst_daily <- feather_rst |> 
+  group_by(date, stream, site, site_group) |> 
+  summarize(count = sum(count))
+```
+
+```{r}
+
+cumulative <- feather_rst_daily |> 
+  mutate(water_year = ifelse(month(date) %in% 10:12, year(date) + 1, year(date)),
+         fake_date = as_date(paste(ifelse(month(date) %in% 10:12, 1999, 2000), month(date), day(date)))) |> 
+  arrange(date) %>%
+  group_by(site, water_year) %>%
+  mutate(count = ifelse(is.na(count), 0, count), 
+         total_count = sum(count, na.rm = T), 
+         cumulative_catch = cumsum(count),
+         prop_cuml_catch = cumulative_catch/total_count * 100) |> 
+  filter(site != "live oak")
+
+plotly::plot_ly(
+  filter(cumulative, water_year %in% 2001:2002),
+  x = ~ fake_date,
+  y = ~ prop_cuml_catch,
+  color = ~ site,
+  text = ~ water_year,
+  hovertemplate = paste("Water Year: %{text}"),
+  colors = colors_small,
+  type = 'scatter',
+  mode = 'lines'
+) %>%
+  plotly::layout(
+    title = "Cumulative Catch in Feather River RST (2001-2002)",
+    xaxis = list(title = "Months", tickformat = "%b"),
+    yaxis = list(title = "Percent Cumulative Catch")
+  ) 
+```
+
 ### Variables of Interest
 
 The variables of interest include cover, substrate, velocity and depth

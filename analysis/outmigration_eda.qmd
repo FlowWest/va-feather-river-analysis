@@ -4,19 +4,13 @@ format: html
 editor: visual
 ---
 
-**Goal**
-Understand timing and patterns of juvenile outmigration on the Feather River and 
-compare to timing and density of fish observations in the mini snorkel dataset.
+**Goal** Understand timing and patterns of juvenile outmigration on the Feather River and compare to timing and density of fish observations in the mini snorkel dataset.
 
 **Insights**
 
-- The majority of catch in RSTs on the Feather River (both LFC and HFC) have passed
-through by March (~80%)
-- There are small differences in cumulative catch curves between the HFC and LFC
-indicating that outmigration is not affecting these sites differently
-- The fish that remain in the Feather River after March and into May and June are
-likely larger ( > 50mm) which aligns with the fork length distributions by month
-in the habitat data
+-   The majority of catch in RSTs on the Feather River (both LFC and HFC) have passed through by March (\~80%)
+-   There are small differences in cumulative catch curves between the HFC and LFC indicating that outmigration is not affecting these sites differently
+-   The fish that remain in the Feather River after March and into May and June are likely larger ( \> 50mm) which aligns with the fork length distributions by month in the habitat data
 
 ```{r}
 library(tidyverse)
@@ -111,6 +105,7 @@ feather_fl |>
   ggplot(aes(x = fork_length, fill = site)) +
   geom_density()
 ```
+
 ```{r}
 mini_snorkel_raw |> 
   filter(fl_mm < 100) |> 
