@@ -53,6 +53,8 @@ options(scipen=999)
 
 ```
 
+#### *This analysis has been moved to `feather_river_cover_analysis_salmon` and `feather_river_cover_analysis_steelhead`*
+
 ## Objective
 
 Develop a model that reflects the significance of cover, substrate,
