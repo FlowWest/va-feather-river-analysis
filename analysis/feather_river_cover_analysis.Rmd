@@ -356,8 +356,8 @@ feather_rst_daily <- feather_rst |>
 cumulative <- feather_rst_daily |> 
   mutate(water_year = ifelse(month(date) %in% 10:12, year(date) + 1, year(date)),
          fake_date = as_date(paste(ifelse(month(date) %in% 10:12, 1999, 2000), month(date), day(date)))) |> 
-  arrange(date) %>%
-  group_by(site, water_year) %>%
+  arrange(date) |> 
+  group_by(site, water_year) |> 
   mutate(count = ifelse(is.na(count), 0, count), 
          total_count = sum(count, na.rm = T), 
          cumulative_catch = cumsum(count),
@@ -374,7 +374,7 @@ plotly::plot_ly(
   colors = colors_small,
   type = 'scatter',
   mode = 'lines'
-) %>%
+) |> 
   plotly::layout(
     title = "Cumulative Catch in Feather River RST (2001-2002)",
     xaxis = list(title = "Months", tickformat = "%b"),
@@ -973,4 +973,72 @@ measurements alone.
 
 ```{r}
 knitr::knit_exit()
+```
+
+## Figures
+
+**Conallin et al. 2014 - Figure 5**
+
+```{r}
+cover_vars <- c(
+  "small_woody",
+  "large_woody",
+  "overhanging_veg",
+  "undercut_bank",
+  "aquatic_veg",
+  "boulder_substrate",
+  "cobble_substrate"
+)
+
+site_var <- "channel_location"  
+
+df_long <- log_reg_data %>%
+  mutate(presence = as.integer(count > 0))  |> 
+  select(all_of(site_var), presence, all_of(cover_vars)) |> 
+  mutate(across(all_of(cover_vars), ~ as.integer(.x > 0))) |> 
+  pivot_longer(
+    cols = all_of(cover_vars),
+    names_to = "feature",
+    values_to = "feature_present"
+  )
+
+feature_summary <- df_long |> 
+  group_by(.data[[site_var]], feature) |> 
+  summarise(
+    n_all = n(),
+    n_present_feature = sum(feature_present == 1, na.rm = TRUE),
+    n_fish_present = sum(presence == 1, na.rm = TRUE),
+    n_fish_present_with_feature = sum(presence == 1 & feature_present == 1, na.rm = TRUE),
+    .groups = "drop"
+  ) |> 
+  group_by(.data[[site_var]]) |> 
+  mutate(
+    HA = n_present_feature / n_all,
+    HU = ifelse(n_fish_present > 0, n_fish_present_with_feature / n_fish_present, NA_real_),
+    P  = HU / HA,
+    HSI_raw = ifelse(is.finite(P), P / max(P, na.rm = TRUE), NA_real_)
+  ) |> 
+  ungroup()
+
+plot_df <- feature_summary |> 
+  select(.data[[site_var]], feature, HA, HU, HSI_raw) |> 
+  pivot_longer(cols = c(HA, HU, HSI_raw), names_to = "panel", values_to = "value") |> 
+  mutate(
+    panel = recode(panel,
+                   HA = "HA (availability)",
+                   HU = "HU (utilization)",
+                   HSI_raw = "HSI (preference)"),
+    feature = str_replace_all(feature, "_", " ")
+  )
+
+ggplot(plot_df, aes(x = feature, y = value)) +
+  geom_col(fill = "darkgreen", alpha = 0.6) +
+  facet_grid(panel ~ .data[[site_var]], scales = "free_y") +
+  labs(x = NULL, y = "Value (0–1)", title = "Habitat feature availability, use, and preference by channel location") +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.text.x = element_text(size = 9)
+  )
+
 ```
