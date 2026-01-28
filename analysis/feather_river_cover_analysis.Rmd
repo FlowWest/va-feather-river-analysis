@@ -262,8 +262,42 @@ redd_summary <- redd_near_with_snorkel |>
   st_drop_geometry() |>
   group_by(location) |>
   summarise(
-    redd_total = sum(n_redds),                    
+    redd_total = sum(n_redds),  
     redd_presence = as.integer(redd_total > 0)
+  )
+
+
+```
+
+```{r eval=FALSE, include=FALSE}
+redd_summary_for_plot <- redd_near_with_snorkel |>
+  st_drop_geometry() |>
+  group_by(location) |>
+  summarise(
+    redd_total = sum(n_redds),
+    redd_presence = as.integer(redd_total > 0)
+  )
+
+ggplot(redd_summary, aes(x = redd_total)) +
+  geom_density(fill = "darkred", alpha = 0.5) +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Redd Totals Across Locations",
+    x = "Total redd count per location",
+    y = "Density"
+  )
+
+
+redd_summary_for_plot %>%
+  arrange(redd_total) %>%
+  mutate(location = factor(location, levels = location)) %>%
+  ggplot(aes(x = redd_total, y = location)) +
+  geom_col(fill = "darkred", alpha = 0.7) +
+  theme_minimal() +
+  labs(
+    title = "Total Redd Counts by Location",
+    x = "Total redds",
+    y = NULL
   )
 ```
 
@@ -323,7 +357,7 @@ leaflet() |>
 
 ```
 
-### Outmigration Analysis  
+### Outmigration Analysis
 
 **Goal**
 

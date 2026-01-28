@@ -168,7 +168,7 @@ TODO: choose a representative year of redds rather than the entire dataset
 **Caveats**
 
 -   The temporal range of redd data (2014-2023) differs from the mini
-    snorkel (2001, 2002). This explorations summarizes the entire redd
+    snorkel (2001, 2002). This exploration summarizes the entire redd
     dataset.
 
 ```{r}
@@ -191,22 +191,32 @@ redd_data_with_redds |>
   xlab("Year")
 ```
 
+Total number of redds by year
+
+```{r}
+redd_by_year <- redd_data_with_redds |> group_by(year = year(date)) |> summarise(total_redds = sum(number_redds)) 
+
+knitr::kable(redd_by_year)
+
+```
+
 Combine redd data with mini snorkel to see if redds are a spatial
 indicator or spawning potential/habitat quality.
 
 ```{r}
 redd_data_by_location <- redd_data |> 
-  group_by(longitude, latitude, location) |> 
-  summarise(n_redds = sum(number_redds),
-            n_fish_on_redds = sum(number_salmon)) |>  # TODO: double check this variable is interpreted correctly. On redd or near redd?
-  mutate(n_fish_on_redds = replace_na(n_fish_on_redds, 0)) |> 
+ # group_by(longitude, latitude, location) |> 
+#  summarise(n_redds = sum(number_redds),
+ #           n_fish_on_redds = sum(number_salmon)) |>  # TODO: double check this variable is interpreted correctly. On redd or near redd?
+  #mutate(n_fish_on_redds = replace_na(n_fish_on_redds, 0)) |> 
+  rename(date_redd = date) |> 
   filter(!is.na(longitude)) |> 
   sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
 
-redd_data_by_location |> 
-  ggplot(aes(x = location, y = n_redds)) +
-  geom_col() +
-  coord_flip()
+# redd_data_by_location |> 
+#   ggplot(aes(x = location, y = n_redds)) +
+#   geom_col() +
+#   coord_flip()
 
 mini_sf <- mini_snorkel_model_ready |> 
   filter(!is.na(longitude)) |> 
@@ -250,11 +260,21 @@ redd_data_by_location |>
   ) +
   theme_minimal(base_size = 13)
 
-redd_summary <- redd_near_with_snorkel |>
-  st_drop_geometry() |>
-  group_by(location) |>
+# redd_summary <- redd_near_with_snorkel |>
+#   st_drop_geometry() |>
+#   group_by(location) |>
+#   summarise(
+#     redd_total = sum(n_redds),                    
+#     redd_presence = as.integer(redd_total > 0)
+#   )
+
+redd_summary <- redd_near_with_snorkel |> 
+  st_drop_geometry() |> 
+  group_by(location) |> 
   summarise(
-    redd_total = sum(n_redds),                    
+    redd_total = sum(number_redds),
+    redd_mean = mean(number_redds),
+    redd_median = median(number_redds),
     redd_presence = as.integer(redd_total > 0)
   )
 ```
