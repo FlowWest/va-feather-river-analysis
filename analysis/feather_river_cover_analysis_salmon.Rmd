@@ -1,5 +1,5 @@
 ---
-title: "Feather River - Mini Snorkel Data Modeling and Analysis for Salmon"
+title: "Feather River - Mini Snorkel Data Modeling and Analysis for Chinook Salmon"
 author: "Maddee Wiggins (FlowWest)"
 date: "`r Sys.Date()`"
 output:
@@ -61,7 +61,7 @@ depth, and velocity on chinook salmon presence and absence.
 ## Analysis Overview
 
 Model was developed using [Feather River Mini Snorkel
-Data](https://github.com/Healthy-Rivers-and-Landscapes-Science/feather-river/tree/main/edi-mini-snorkel) data which consists of numeric fish count observations that can also be expressed as a binary presence–absence response. Because the count data were highly zero-inflated, with many observations in which no fish were detected, we initially evaluated a hurdle modeling approach following the framework described in Gard (2024, in review). Hurdle models are well suited for datasets dominated by absences, as they separately model the processes governing occurrence and abundance. In this case, the hurdle model showed reasonable performance for the presence–absence (zero) component but performed poorly for the count component, indicating that fish abundance could not be reliably predicted from the available covariates.
+Data](https://github.com/Healthy-Rivers-and-Landscapes-Science/feather-river/tree/main/edi-mini-snorkel) data (filtered to Chinook Salmon) which consists of numeric fish count observations that can also be expressed as a binary presence–absence response. Because the count data were highly zero-inflated, with many observations in which no fish were detected, we initially evaluated a hurdle modeling approach following the framework described in Gard (2024, in review). Hurdle models are well suited for datasets dominated by absences, as they separately model the processes governing occurrence and abundance. In this case, the hurdle model showed reasonable performance for the presence–absence (zero) component but performed poorly for the count component, indicating that fish abundance could not be reliably predicted from the available covariates.
 
 Given these limitations, subsequent analyses focused on modeling fish occurrence using logistic regression. Data were collected between March and August, a period that spans seasonal changes in habitat conditions and salmonid outmigration, resulting in strong temporal variation in fish presence. In addition, habitat conditions differ substantially between high-flow and low-flow channels. Initial exploratory analyses considered fitting separate models for each channel type; however, we ultimately adopted a unified logistic regression framework that allowed these differences to be incorporated through random effects while maintaining a single, interpretable model structure.
 
@@ -84,8 +84,6 @@ mini_snorkel_raw <- mini_fish_raw |>
 ```
 
 #### Outliers
-
-TODO: revise as needed 
 
 `count` outliers exist, in the high flow and the low flow channel,
 however their removal did not impact the model results so they were kept
@@ -118,14 +116,14 @@ mini_snorkel_model_ready <- mini_snorkel_raw
 ### High Flow vs. Low Flow Channel
 
 Table 1 and figure 2 explore whether fish presence was impacted by the
-high or low flow channels. Overall there are similar numbers of fish
-present in the high flow channel compared to the low flow channel (table
+high or low flow channels. Overall there are more salmon
+present in the low flow channel compared to the high flow channel (table
 1). There are more fish present in the high flow channel in March but
 they move quickly downstream. Fish remain in the low flow channel for
 much longer time (figure 2).
 
-do we have the same amount of sampling plots in the high flow vs. low
-flow?
+<!-- do we have the same amount of sampling plots in the high flow vs. low -->
+<!-- flow? -->
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 
@@ -154,22 +152,11 @@ mini_snorkel_model_ready |>
 
 ```
 
-### Redd Location Exploration
+### Redd Data Integration and Exploration
 
-TODO: choose a representative year of redds rather than the entire dataset
+Feather River redd survey data were sourced from the Environmental Data Initiative (EDI) and processed for integration with the Mini Snorkel habitat dataset. Locations with zero observed redds were removed, and remaining redd points were spatially joined to the nearest Mini Snorkel transect locations to ensure consistent site alignment. Redd information was then summarized at the transect scale, including both the total number of redds and a binary presence–absence indicator for spawning activity.
 
-**Process**
-
--   Source Feather River redd data from EDI
--   Remove locations that have zero redds
--   Spatially join redd locations to the mini snorkel transect locations
--   Summarize by total number of redds and presence/absence
-
-**Caveats**
-
--   The temporal range of redd data (2014-2023) differs from the mini
-    snorkel (2001, 2002). This exploration summarizes the entire redd
-    dataset.
+A key caveat is that the temporal coverage of the redd surveys (2014–2023) does not overlap with the Mini Snorkel observations (2001–2002). As a result, this exploration reflects an aggregate summary across the full redd dataset rather than a direct year-matched comparison. Rather than selecting a single “representative year” or subset of years, we chose to incorporate the entire redd record. This decision was made because no clear representative year could be identified, and summarizing across all available years allowed us to remove the temporal component while still capturing the overall spatial pattern of spawning activity when combining redd data with the Mini Snorkel habitat observations.
 
 ```{r}
 # remove zero redds
@@ -984,11 +971,11 @@ ggplot(effects_df, aes(x = odds_ratio, y = reorder(term, odds_ratio))) +
 
 ### Logistic Regression with Random Effect Discussion
 
-Fish occurrence in the Feather River was shaped by a combination of local habitat features, spawning context, and strong spatial and seasonal structure. Incorporating random effects for both transect location and month substantially improved model performance, yielding high discriminatory ability (AUC = 0.91) and indicating that fish presence is influenced not only by measured habitat covariates but also by broader spatial and temporal processes.
+Chinook Salmon occurrence in the Feather River was shaped by a combination of local habitat features, spawning context, and strong spatial and seasonal structure. Incorporating random effects for both transect location and month substantially improved model performance, yielding high discriminatory ability (AUC = 0.91) and indicating that fish presence is influenced not only by measured habitat covariates but also by broader spatial and temporal processes.
 
 **Seasonal and Spatial Structure**
 
-The inclusion of month as a random effect revealed pronounced seasonal variation in baseline fish occurrence. Month-level random intercepts varied widely, with odds of presence in early spring months (March–April) approximately 4–5 times higher than the global mean, while late-summer months exhibited substantially reduced odds. This pattern is consistent with seasonal dynamics in salmonid behavior, including outmigration earlier in the sampling period, and highlights the importance of accounting for temporal structure when modeling fish presence.
+The inclusion of month as a random effect revealed pronounced seasonal variation in baseline salmon occurrence. Month-level random intercepts varied widely, with odds of presence in early spring months (March–April) approximately 4–5 times higher than the global mean, while late-summer months exhibited substantially reduced odds. This pattern is consistent with seasonal dynamics in salmonid behavior, including outmigration earlier in the sampling period, and highlights the importance of accounting for temporal structure when modeling fish presence.
 
 Site-level random effects also indicated persistent spatial heterogeneity across transects. Several locations exhibited consistently lower baseline probabilities of fish presence (e.g., Vance Avenue and Big Bar), while others were closer to or above the global mean. These differences suggest that reach-scale or site-specific factors—such as connectivity, geomorphic context, or unmeasured hydraulic or thermal conditions—continue to influence fish distribution beyond the microhabitat variables included in the model.
 
