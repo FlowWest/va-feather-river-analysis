@@ -1,0 +1,193 @@
+---
+title: "Redd Locations and Habitat Utilization"
+author: "Maddee Wiggins (FlowWest)"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+library(tidyverse)
+library(leaflet)
+library(sf)
+library(scales)
+```
+
+## Objective
+
+Using mini snorkel data from the Feather River, make a visual to understand if habitat utilization and location of redds is correlated.
+
+```{r message=FALSE, warning=FALSE}
+source(here::here("data-raw", "pull_from_edi.R"))
+```
+
+### Process
+
+-   Source Feather River redd data from EDI
+
+-   Remove locations that have zero redds
+
+-   From Mini Snorkel data, extract location, channel type, channel location (High Flow vs. Low Flow), and number of fish counted
+
+```{r}
+# remove zero redds
+redd_data_with_redds <- redd_data |> 
+  filter(number_redds > 0)
+```
+
+### Redd data over time
+
+This visual represents the number of redds over time at each location. It helps provide context on which sites generally have redds and if they have redds consistently over time.
+
+```{r}
+redd_data_with_redds |> 
+  ggplot(aes(x = lubridate::year(date), y = location, fill = number_redds)) +
+  geom_tile(color = "white",  linewidth = 0.5) 
+```
+
+```{r}
+# Process mini snorkel data 
+
+colors_full <-  c("#9A8822", "#F5CDB4", "#F8AFA8", "#FDDDA0", "#74A089", #Royal 2
+                  "#899DA4", "#C93312", "#DC863B", # royal 1 (- 3)
+                  "#F1BB7B", "#FD6467", "#5B1A18", "#D67236",# Grand Budapest 1 (-4)
+                  "#D8B70A", "#02401B", "#A2A475", # Cavalcanti 1
+                  "#E6A0C4", "#C6CDF7", "#D8A499", "#7294D4", #Grand Budapest 2
+                  "#9986A5", "#EAD3BF", "#AA9486", "#B6854D", "#798E87", # Isle of dogs 2 altered slightly
+                  "#F3DF6C", "#CEAB07", "#D5D5D3", "#24281A", # Moonriese 1, 
+                  "#798E87", "#C27D38", "#CCC591", "#29211F", # moonrise 2
+                  "#85D4E3", "#F4B5BD", "#9C964A", "#CDC08C", "#FAD77B" ) # moonrise 3 
+
+# read in cover data 
+location_order <- tibble(location = c("hatchery ditch", "hour bars", "hatchery riffle", "trailer park", 
+                                      "bedrock riffle", "steep riffle", "robinson riffle", "upper big hole", 
+                                      "lower big hole", "g95", "gridley riffle", "big bar", "goose riffle", 
+                                      "macfarland riffle", "shallow riffle", "herringer riffle", "junkyard riffle", 
+                                      "auditorium riffle", "eye side channel", "matthews riffle", "eye riffle", 
+                                      "lower hour", "aleck riffle", "weir riffle", "vance avenue", 
+                                      "big hole", "hour riffle", "cox riffle", "gateway riffle"),
+                         order = c(2,19,1,5,
+                                   4,9,8,15,
+                                   16,17,23,21,20,
+                                   22,25,26,24,
+                                   3,11,6,12,
+                                   18,7,10,13,
+                                   14,NA,NA,NA))
+feather_cover <- mini_fish_raw |> 
+  left_join(mini_locations_raw |> 
+              distinct(location_table_id, date, channel_location, location)) |> 
+  # create cover variables that are more consistent with strategic plan categories
+  mutate(woody_debris = percent_small_woody_cover_inchannel + percent_large_woody_cover_inchannel,
+         boulder = percent_boulder_substrate,
+         cobble = percent_cobble_substrate, 
+         undercut_bank = percent_undercut_bank, 
+         aquatic_veg = percent_submerged_aquatic_veg_inchannel, 
+         overhanging_veg = percent_cover_half_meter_overhead + percent_cover_more_than_half_meter_overhead) |> 
+  select(micro_hab_data_tbl_id, channel_location, location_table_id, transect_code, location,
+         woody_debris:overhanging_veg, count, date) |>
+  pivot_longer(cols = c(woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg), names_to = "cover_type", 
+               values_to = "percent_cover") |>  
+  distinct() |> 
+  left_join(location_order) |> 
+  mutate(fish_presence = ifelse(count > 0, "Yes", "No")) |> 
+  mutate(location_table_id = paste0(date, " (location id: ", location_table_id, ")")) 
+
+# TODO: Based off of the large fluctuation in `count` variable, a binary
+# presence/absence might be better
+summary_fish_count <- feather_cover |>
+  group_by(location) |>
+  summarize(
+    n_fish = sum(count, na.rm = TRUE),
+    fish_presence = as.integer(any(count > 0)),
+    .groups = "drop"
+  )
+
+locations_sf <- sf::st_as_sf(mini_locations_raw |> 
+                               distinct(location_table_id, date, channel_location, .keep_all = T) |> 
+                               na.omit(), coords = c('longitude', 'latitude')) |> 
+  select(location_table_id, channel_location, location, channel_type) |> 
+  mutate(color = colors_full[match(location, location)]) |> 
+  mutate(channel_type_color = ifelse(channel_location == "LFC", "darkblue", "lightblue"))
+
+locs_with_fish <- locations_sf |> 
+  left_join(summary_fish_count) 
+```
+
+## Map Visuals
+
+The following two maps provide context into the habitat transect locations, identified by whether they are in the high flow "HFC" or low flow "LFC" part of the Feather River. The first map's transect location size is dependent on number of fish counted at that transect over the course of the sampling period. The second map is filtered to only show transect locations that had fish recorded. 
+
+Qualitatively, redds cluster around habitat transect locations and sites where fish were recorded but without consistency.
+
+### Fish Count and Redd Locations
+
+Size of habitat transects (LFC/HFC) are based off number of fish recorded during the sampling period. 
+
+```{r}
+redd_sf <- sf::st_as_sf(redd_data_with_redds |> 
+                          filter(!is.na(latitude)), coords = c('longitude', 'latitude'))
+leaflet() |>
+  addProviderTiles(providers$Esri.WorldImagery, group = "Aerial Imagery") |>
+  addProviderTiles(providers$OpenStreetMap, group = "Street Map") |>
+  addCircleMarkers(data = locs_with_fish, 
+                   color = ~channel_type_color,
+                   radius = ~rescale(n_fish, to = c(3, 20)),
+                   fill = TRUE,
+                   fillOpacity = 0.6,
+                   opacity = 0.6) |> 
+  addCircleMarkers(data = redd_sf, 
+                   color = 'darkred',
+                   radius = 2,
+                   fill = TRUE,
+                   fillOpacity = 0.2,
+                   opacity = 0.6) |>
+  addLayersControl(
+    baseGroups = c("Aerial Imagery", "Street Map"),
+    position = "topleft",
+    options = layersControlOptions(collapsed = FALSE)
+  ) |> 
+  addLegend(colors = "darkred", labels = "Redd Locations") |> 
+  addLegend(title = "Habitat Transects",
+            colors = unique(locations_sf$channel_type_color), 
+            labels = unique(locations_sf$channel_location))
+```
+
+### Fish Presence and Redd Locations
+
+Habitat transects (LFC/HFC) are only shown for sites that had fish recorded. 
+
+```{r}
+
+leaflet() |>
+  addProviderTiles(providers$Esri.WorldImagery, group = "Aerial Imagery") |>
+  addProviderTiles(providers$OpenStreetMap, group = "Street Map") |>
+  addCircleMarkers(data = locs_with_fish |> 
+                     filter(fish_presence == 1), 
+                   color = ~channel_type_color,
+                   fill = TRUE,
+                   radius = 4,
+                   fillOpacity = 0.6,
+                   opacity = 0.6) |> 
+  addCircleMarkers(data = redd_sf, 
+                   color = 'darkred',
+                   radius = 2,
+                   fill = TRUE,
+                   fillOpacity = 0.2,
+                   opacity = 0.6) |>
+  addLayersControl(
+    baseGroups = c("Aerial Imagery", "Street Map"),
+    position = "topleft",
+    options = layersControlOptions(collapsed = FALSE)
+  ) |> 
+  addLegend(colors = "darkred", labels = "Redd Locations") |> 
+  addLegend(title = "Habitat Transects",
+            colors = unique(locations_sf$channel_type_color), 
+            labels = unique(locations_sf$channel_location))
+
+```
