@@ -60,8 +60,12 @@ depth, and velocity on steelhead presence and absence.
 
 ## Analysis Overview
 
-Hurdle model explored but was a very poor fit for the count. Excluding
-from report.
+Model was developed using [Feather River Mini Snorkel
+Data](https://github.com/Healthy-Rivers-and-Landscapes-Science/feather-river/tree/main/edi-mini-snorkel) filtered to steelhead observations. The dataset consists of numeric fish count measurements that can also be represented as a binary presence–absence response. Because steelhead counts were highly zero‐inflated, with many transects recording no fish and a small number of observations containing relatively large counts, we initially explored abundance‐based modeling approaches (ie., Hurdle models). However, preliminary analyses indicated that models attempting to predict steelhead counts performed very poorly, reflecting the high variability and limited information content in the abundance data. As a result, abundance modeling was not pursued further and is not included in this document.
+
+Subsequent analyses therefore focused on modeling steelhead occurrence using logistic regression, which better matched the structure and signal contained in the data. Mini Snorkel surveys were conducted between March and August, a period that spans substantial seasonal changes in habitat conditions and steelhead outmigration, resulting in strong temporal variation in presence. Steelhead were observed predominantly in low-flow channels, reflecting differences in habitat availability, hydraulic conditions, and refuge opportunities between channel types. Although initial exploratory analyses considered fitting separate models for high-flow and low-flow channels, we ultimately adopted a unified logistic regression framework that incorporated spatial and temporal heterogeneity through random effects. This approach allowed us to account for systematic differences among sites and seasons while retaining a single, interpretable model structure for inference.
+
+To account for spatial and temporal structure, we evaluated a series of mixed‐effects logistic regression models that included random intercepts for transect site and month. These random effects captured persistent differences among sites, repeated sampling within transects, and seasonal shifts in steelhead presence. Among the candidate models, the best‐performing model included random effects for both site and month, highlighting the importance of spatial heterogeneity and seasonal dynamics in shaping steelhead occurrence. Including channel type as an additional random effect did not improve model performance. This final model provided the strongest overall fit and formed the basis for inference on habitat associations with steelhead presence.
 
 ## Review Data
 
@@ -706,6 +710,16 @@ ggplot(effects_df, aes(x = odds_ratio, y = reorder(term, odds_ratio))) +
 ```
 
 ### Discussion
+
+Steelhead presence in the Feather River was strongly influenced by local habitat structure, spawning context, and broader spatial and seasonal variation. The mixed‐effects logistic regression model that included random intercepts for transect location and month performed very well (AUC = 0.91), underscoring the importance of accounting for both site‐level heterogeneity and seasonal dynamics when modeling steelhead occurrence.
+
+Structural habitat features were the most consistent predictors of steelhead presence. Overhanging vegetation, aquatic vegetation, and small woody debris were all positively associated with occurrence, indicating a strong preference for habitats that provide cover, refuge, and hydraulic complexity. These findings align with the ecology of juvenile steelhead, which typically select habitats that reduce predation risk and energetic costs. In contrast, substrate variables and large woody debris did not show strong independent effects once other habitat features were considered.
+
+Spawning context also played a key role. The presence of nearby redds and higher total redd counts were both associated with increased probabilities of steelhead presence, suggesting spatial coupling between spawning and rearing habitats or shared reach‐scale conditions that support both life stages. While these effects were strong, they were estimated with greater uncertainty than structural habitat predictors.
+
+Hydraulic variables had secondary influence. Velocity showed a negative association with steelhead presence, indicating reduced use of higher‐velocity habitats when suitable cover was lacking. Depth, however, exhibited little effect, suggesting that depth alone is less important than habitat complexity.
+
+Substantial unexplained variation remained at both the site and seasonal scales. Random‐effect estimates indicated that some transects consistently supported higher baseline probabilities of steelhead presence, while others were persistently low, reflecting the influence of unmeasured reach‐scale factors such as connectivity, geomorphology, or thermal conditions. Strong month‐level effects revealed pronounced seasonal structure, with higher occurrence in spring and reduced presence later in the season, consistent with outmigration patterns. Together, these results highlight the combined importance of fine‐scale habitat structure and broader spatial and temporal context in shaping steelhead distribution.
 
 ```{r}
 knitr::knit_exit()

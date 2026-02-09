@@ -11,7 +11,7 @@
 
 <meta name="author" content="Maddee Wiggins (FlowWest)" />
 
-<meta name="date" content="2026-02-06" />
+<meta name="date" content="2026-02-09" />
 
 <title>Feather River - Mini Snorkel Data Modeling and Analysis for Steelhead</title>
 
@@ -6726,7 +6726,7 @@ border-radius: 0px;
 <h1 class="title toc-ignore">Feather River - Mini Snorkel Data Modeling
 and Analysis for Steelhead</h1>
 <h4 class="author">Maddee Wiggins (FlowWest)</h4>
-<h4 class="date">2026-02-06</h4>
+<h4 class="date">2026-02-09</h4>
 
 </div>
 
@@ -6738,8 +6738,44 @@ depth, and velocity on steelhead presence and absence.</p>
 </div>
 <div id="analysis-overview" class="section level2">
 <h2>Analysis Overview</h2>
-<p>Hurdle model explored but was a very poor fit for the count.
-Excluding from report.</p>
+<p>Model was developed using <a href="https://github.com/Healthy-Rivers-and-Landscapes-Science/feather-river/tree/main/edi-mini-snorkel">Feather
+River Mini Snorkel Data</a> filtered to steelhead observations. The
+dataset consists of numeric fish count measurements that can also be
+represented as a binary presence–absence response. Because steelhead
+counts were highly zero‐inflated, with many transects recording no fish
+and a small number of observations containing relatively large counts,
+we initially explored abundance‐based modeling approaches (ie., Hurdle
+models). However, preliminary analyses indicated that models attempting
+to predict steelhead counts performed very poorly, reflecting the high
+variability and limited information content in the abundance data. As a
+result, abundance modeling was not pursued further and is not included
+in this document.</p>
+<p>Subsequent analyses therefore focused on modeling steelhead
+occurrence using logistic regression, which better matched the structure
+and signal contained in the data. Mini Snorkel surveys were conducted
+between March and August, a period that spans substantial seasonal
+changes in habitat conditions and steelhead outmigration, resulting in
+strong temporal variation in presence. Steelhead were observed
+predominantly in low-flow channels, reflecting differences in habitat
+availability, hydraulic conditions, and refuge opportunities between
+channel types. Although initial exploratory analyses considered fitting
+separate models for high-flow and low-flow channels, we ultimately
+adopted a unified logistic regression framework that incorporated
+spatial and temporal heterogeneity through random effects. This approach
+allowed us to account for systematic differences among sites and seasons
+while retaining a single, interpretable model structure for
+inference.</p>
+<p>To account for spatial and temporal structure, we evaluated a series
+of mixed‐effects logistic regression models that included random
+intercepts for transect site and month. These random effects captured
+persistent differences among sites, repeated sampling within transects,
+and seasonal shifts in steelhead presence. Among the candidate models,
+the best‐performing model included random effects for both site and
+month, highlighting the importance of spatial heterogeneity and seasonal
+dynamics in shaping steelhead occurrence. Including channel type as an
+additional random effect did not improve model performance. This final
+model provided the strongest overall fit and formed the basis for
+inference on habitat associations with steelhead presence.</p>
 </div>
 <div id="review-data" class="section level2">
 <h2>Review Data</h2>
@@ -6974,8 +7010,8 @@ incorrect coordinates</caption>
 <p>A visual representation of the amount of redds joined with each of
 the mini snorkel transect locations. Outliers that have been removed are
 shown in blue.</p>
-<div class="leaflet html-widget html-fill-item" id="htmlwidget-7a852014eafaf4d848ec" style="width:672px;height:480px;"></div>
-<script type="application/json" data-for="htmlwidget-7a852014eafaf4d848ec">{"x":{"options":{"crs":{"crsClass":"L.CRS.EPSG3857","code":null,"proj4def":null,"projectedBounds":null,"options":{}}},"calls":[{"method":"addProviderTiles","args":["Esri.WorldImagery",null,"Aerial Imagery",{"errorTileUrl":"","noWrap":false,"detectRetina":false}]},{"method":"addProviderTiles","args":["OpenStreetMap",null,"Street Map",{"errorTileUrl":"","noWrap":false,"detectRetina":false}]},{"method":"addCircleMarkers","args":[[39.41598333333334,39.01666444444444,39.42892885305344],[-121.5763166666667,-121.5567841666667,-121.6144244718646],10,null,null,{"interactive":true,"className":"","stroke":true,"color":"#03F","weight":5,"opacity":0.5,"fill":true,"fillColor":"#03F","fillOpacity":0.2},null,null,["Outlier Location Name: Hour Bars East<br>Date: 2003-01-16","Outlier Location Name: Hatchery Side channel<br>Date: 2009-02-25","Outlier Location Name: Hour<br>Date: 2020-02-19"],null,null,{"interactive":false,"permanent":false,"direction":"auto","opacity":1,"offset":[0,0],"textsize":"10px","textOnly":false,"className":"","sticky":true},null]},{"method":"addCircleMarkers","args":[[39.484433,39.5151,39.51305,39.385917,39.44335,39.33564114789087,39.45725,39.457533,39.43085,39.45696577928121,39.405667,39.354117,39.516017,39.515833,39.3176,39.415833,39.420183,39.34555,39.437333,39.420667,39.375,39.49157966172107,39.464917,39.329283,39.462633,39.494033,39.4384,39.4509,39.46175],[-121.578983,-121.56,-121.56815,-121.6287,-121.637133,-121.6321500039698,-121.6139,-121.613133,-121.631033,-121.6256036481416,-121.61715,-121.630583,-121.558817,-121.553533,-121.623233,-121.626667,-121.626017,-121.626233,-121.638,-121.625667,-121.632333,-121.5790352595597,-121.597617,-121.630683,-121.604383,-121.580017,-121.637333,-121.637933,-121.60645],6,["aleck riffle","auditorium riffle","bedrock riffle","big bar","big hole","cox riffle","eye riffle","eye side channel","g95","gateway riffle","goose riffle","gridley riffle","hatchery ditch","hatchery riffle","herringer riffle","hour bars","hour riffle","junkyard riffle","lower big hole","lower hour","macfarland riffle","matthews riffle","robinson riffle","shallow riffle","steep riffle","trailer park","upper big hole","vance avenue","weir riffle"],null,{"interactive":true,"className":"","stroke":true,"color":[null,"#F3DF6C","#899DA4","#D8A499",null,null,"#85D4E3","#CCC591","#D8B70A",null,"#7294D4","#C6CDF7","#9A8822","#F8AFA8","#AA9486","#F5CDB4",null,"#B6854D","#D67236","#CDC08C","#9986A5","#29211F","#DC863B","#EAD3BF","#C93312","#74A089","#5B1A18",null,null],"weight":5,"opacity":0.6,"fill":true,"fillColor":[null,"#F3DF6C","#899DA4","#D8A499",null,null,"#85D4E3","#CCC591","#D8B70A",null,"#7294D4","#C6CDF7","#9A8822","#F8AFA8","#AA9486","#F5CDB4",null,"#B6854D","#D67236","#CDC08C","#9986A5","#29211F","#DC863B","#EAD3BF","#C93312","#74A089","#5B1A18",null,null],"fillOpacity":0.2},null,null,["Location Name: aleck riffle<br>Channel Type: mainchannel","Location Name: auditorium riffle<br>Channel Type: mainchannel branch","Location Name: bedrock riffle<br>Channel Type: mainchannel","Location Name: big bar<br>Channel Type: mainchannel","Location Name: big hole<br>Channel Type: mainchannel","Location Name: cox riffle<br>Channel Type: mainchannel","Location Name: eye riffle<br>Channel Type: mainchannel","Location Name: eye side channel<br>Channel Type: sidechannel","Location Name: g95<br>Channel Type: sidechannel","Location Name: gateway riffle<br>Channel Type: mainchannel","Location Name: goose riffle<br>Channel Type: mainchannel","Location Name: gridley riffle<br>Channel Type: mainchannel","Location Name: hatchery ditch<br>Channel Type: sidechannel","Location Name: hatchery riffle<br>Channel Type: mainchannel","Location Name: herringer riffle<br>Channel Type: sidechannel","Location Name: hour bars<br>Channel Type: mainchannel branch","Location Name: hour riffle<br>Channel Type: mainchannel branch","Location Name: junkyard riffle<br>Channel Type: mainchannel","Location Name: lower big hole<br>Channel Type: mainchannel","Location Name: lower hour<br>Channel Type: mainchannel branch","Location Name: macfarland riffle<br>Channel Type: mainchannel","Location Name: matthews riffle<br>Channel Type: mainchannel","Location Name: robinson riffle<br>Channel Type: sidechannel","Location Name: shallow riffle<br>Channel Type: sidechannel","Location Name: steep riffle<br>Channel Type: mainchannel","Location Name: trailer park<br>Channel Type: mainchannel","Location Name: upper big hole<br>Channel Type: mainchannel branch","Location Name: vance avenue<br>Channel Type: mainchannel","Location Name: weir riffle<br>Channel Type: mainchannel"],null,null,{"interactive":false,"permanent":false,"direction":"auto","opacity":1,"offset":[0,0],"textsize":"10px","textOnly":false,"className":"","sticky":true},null]},{"method":"addCircleMarkers","args":[[39.484433,39.5151,39.51305,39.385917,39.457533,39.45696577928121,39.516017,39.515833,39.415833,39.49157966172107,39.464917,39.462633,39.494033,39.4509,39.46175],[-121.578983,-121.56,-121.56815,-121.6287,-121.613133,-121.6256036481416,-121.558817,-121.553533,-121.626667,-121.5790352595597,-121.597617,-121.604383,-121.580017,-121.637933,-121.60645],[3.745019920318725,6.386454183266932,3.067729083665339,3.067729083665339,3.677290836653386,3.812749003984064,20,3.948207171314741,3.067729083665339,3.067729083665339,7.537848605577689,6.657370517928287,3.406374501992032,3.067729083665339,3],null,null,{"interactive":true,"className":"","stroke":true,"color":"darkred","weight":5,"opacity":1,"fill":true,"fillColor":"darkred","fillOpacity":1},null,null,["Location Name: aleck riffle<br>N Redds: 12","Location Name: auditorium riffle<br>N Redds: 51","Location Name: bedrock riffle<br>N Redds: 2","Location Name: big bar<br>N Redds: 2","Location Name: eye side channel<br>N Redds: 11","Location Name: gateway riffle<br>N Redds: 13","Location Name: hatchery ditch<br>N Redds: 252","Location Name: hatchery riffle<br>N Redds: 15","Location Name: hour bars<br>N Redds: 2","Location Name: matthews riffle<br>N Redds: 2","Location Name: robinson riffle<br>N Redds: 68","Location Name: steep riffle<br>N Redds: 55","Location Name: trailer park<br>N Redds: 7","Location Name: vance avenue<br>N Redds: 2","Location Name: weir riffle<br>N Redds: 1"],null,null,{"interactive":false,"permanent":false,"direction":"auto","opacity":1,"offset":[0,0],"textsize":"10px","textOnly":false,"className":"","sticky":true},null]},{"method":"addLayersControl","args":[["Aerial Imagery","Street Map"],[],{"collapsed":false,"autoZIndex":true,"position":"topleft"}]},{"method":"addLegend","args":[{"colors":["darkred"],"labels":["Redd Locations"],"na_color":null,"na_label":"NA","opacity":0.5,"position":"topright","type":"unknown","title":null,"extra":null,"layerId":null,"className":"info legend","group":null}]}],"limits":{"lat":[39.01666444444444,39.516017],"lng":[-121.638,-121.553533]}},"evals":[],"jsHooks":[]}</script>
+<div class="leaflet html-widget html-fill-item" id="htmlwidget-9d765f7383001c2d2e3a" style="width:672px;height:480px;"></div>
+<script type="application/json" data-for="htmlwidget-9d765f7383001c2d2e3a">{"x":{"options":{"crs":{"crsClass":"L.CRS.EPSG3857","code":null,"proj4def":null,"projectedBounds":null,"options":{}}},"calls":[{"method":"addProviderTiles","args":["Esri.WorldImagery",null,"Aerial Imagery",{"errorTileUrl":"","noWrap":false,"detectRetina":false}]},{"method":"addProviderTiles","args":["OpenStreetMap",null,"Street Map",{"errorTileUrl":"","noWrap":false,"detectRetina":false}]},{"method":"addCircleMarkers","args":[[39.41598333333334,39.01666444444444,39.42892885305344],[-121.5763166666667,-121.5567841666667,-121.6144244718646],10,null,null,{"interactive":true,"className":"","stroke":true,"color":"#03F","weight":5,"opacity":0.5,"fill":true,"fillColor":"#03F","fillOpacity":0.2},null,null,["Outlier Location Name: Hour Bars East<br>Date: 2003-01-16","Outlier Location Name: Hatchery Side channel<br>Date: 2009-02-25","Outlier Location Name: Hour<br>Date: 2020-02-19"],null,null,{"interactive":false,"permanent":false,"direction":"auto","opacity":1,"offset":[0,0],"textsize":"10px","textOnly":false,"className":"","sticky":true},null]},{"method":"addCircleMarkers","args":[[39.484433,39.5151,39.51305,39.385917,39.44335,39.33564114789087,39.45725,39.457533,39.43085,39.45696577928121,39.405667,39.354117,39.516017,39.515833,39.3176,39.415833,39.420183,39.34555,39.437333,39.420667,39.375,39.49157966172107,39.464917,39.329283,39.462633,39.494033,39.4384,39.4509,39.46175],[-121.578983,-121.56,-121.56815,-121.6287,-121.637133,-121.6321500039698,-121.6139,-121.613133,-121.631033,-121.6256036481416,-121.61715,-121.630583,-121.558817,-121.553533,-121.623233,-121.626667,-121.626017,-121.626233,-121.638,-121.625667,-121.632333,-121.5790352595597,-121.597617,-121.630683,-121.604383,-121.580017,-121.637333,-121.637933,-121.60645],6,["aleck riffle","auditorium riffle","bedrock riffle","big bar","big hole","cox riffle","eye riffle","eye side channel","g95","gateway riffle","goose riffle","gridley riffle","hatchery ditch","hatchery riffle","herringer riffle","hour bars","hour riffle","junkyard riffle","lower big hole","lower hour","macfarland riffle","matthews riffle","robinson riffle","shallow riffle","steep riffle","trailer park","upper big hole","vance avenue","weir riffle"],null,{"interactive":true,"className":"","stroke":true,"color":[null,"#F3DF6C","#899DA4","#D8A499",null,null,"#85D4E3","#CCC591","#D8B70A",null,"#7294D4","#C6CDF7","#9A8822","#F8AFA8","#AA9486","#F5CDB4",null,"#B6854D","#D67236","#CDC08C","#9986A5","#29211F","#DC863B","#EAD3BF","#C93312","#74A089","#5B1A18",null,null],"weight":5,"opacity":0.6,"fill":true,"fillColor":[null,"#F3DF6C","#899DA4","#D8A499",null,null,"#85D4E3","#CCC591","#D8B70A",null,"#7294D4","#C6CDF7","#9A8822","#F8AFA8","#AA9486","#F5CDB4",null,"#B6854D","#D67236","#CDC08C","#9986A5","#29211F","#DC863B","#EAD3BF","#C93312","#74A089","#5B1A18",null,null],"fillOpacity":0.2},null,null,["Location Name: aleck riffle<br>Channel Type: mainchannel","Location Name: auditorium riffle<br>Channel Type: mainchannel branch","Location Name: bedrock riffle<br>Channel Type: mainchannel","Location Name: big bar<br>Channel Type: mainchannel","Location Name: big hole<br>Channel Type: mainchannel","Location Name: cox riffle<br>Channel Type: mainchannel","Location Name: eye riffle<br>Channel Type: mainchannel","Location Name: eye side channel<br>Channel Type: sidechannel","Location Name: g95<br>Channel Type: sidechannel","Location Name: gateway riffle<br>Channel Type: mainchannel","Location Name: goose riffle<br>Channel Type: mainchannel","Location Name: gridley riffle<br>Channel Type: mainchannel","Location Name: hatchery ditch<br>Channel Type: sidechannel","Location Name: hatchery riffle<br>Channel Type: mainchannel","Location Name: herringer riffle<br>Channel Type: sidechannel","Location Name: hour bars<br>Channel Type: mainchannel branch","Location Name: hour riffle<br>Channel Type: mainchannel branch","Location Name: junkyard riffle<br>Channel Type: mainchannel","Location Name: lower big hole<br>Channel Type: mainchannel","Location Name: lower hour<br>Channel Type: mainchannel branch","Location Name: macfarland riffle<br>Channel Type: mainchannel","Location Name: matthews riffle<br>Channel Type: mainchannel","Location Name: robinson riffle<br>Channel Type: sidechannel","Location Name: shallow riffle<br>Channel Type: sidechannel","Location Name: steep riffle<br>Channel Type: mainchannel","Location Name: trailer park<br>Channel Type: mainchannel","Location Name: upper big hole<br>Channel Type: mainchannel branch","Location Name: vance avenue<br>Channel Type: mainchannel","Location Name: weir riffle<br>Channel Type: mainchannel"],null,null,{"interactive":false,"permanent":false,"direction":"auto","opacity":1,"offset":[0,0],"textsize":"10px","textOnly":false,"className":"","sticky":true},null]},{"method":"addCircleMarkers","args":[[39.484433,39.5151,39.51305,39.385917,39.457533,39.45696577928121,39.516017,39.515833,39.415833,39.49157966172107,39.464917,39.462633,39.494033,39.4509,39.46175],[-121.578983,-121.56,-121.56815,-121.6287,-121.613133,-121.6256036481416,-121.558817,-121.553533,-121.626667,-121.5790352595597,-121.597617,-121.604383,-121.580017,-121.637933,-121.60645],[3.745019920318725,6.386454183266932,3.067729083665339,3.067729083665339,3.677290836653386,3.812749003984064,20,3.948207171314741,3.067729083665339,3.067729083665339,7.537848605577689,6.657370517928287,3.406374501992032,3.067729083665339,3],null,null,{"interactive":true,"className":"","stroke":true,"color":"darkred","weight":5,"opacity":1,"fill":true,"fillColor":"darkred","fillOpacity":1},null,null,["Location Name: aleck riffle<br>N Redds: 12","Location Name: auditorium riffle<br>N Redds: 51","Location Name: bedrock riffle<br>N Redds: 2","Location Name: big bar<br>N Redds: 2","Location Name: eye side channel<br>N Redds: 11","Location Name: gateway riffle<br>N Redds: 13","Location Name: hatchery ditch<br>N Redds: 252","Location Name: hatchery riffle<br>N Redds: 15","Location Name: hour bars<br>N Redds: 2","Location Name: matthews riffle<br>N Redds: 2","Location Name: robinson riffle<br>N Redds: 68","Location Name: steep riffle<br>N Redds: 55","Location Name: trailer park<br>N Redds: 7","Location Name: vance avenue<br>N Redds: 2","Location Name: weir riffle<br>N Redds: 1"],null,null,{"interactive":false,"permanent":false,"direction":"auto","opacity":1,"offset":[0,0],"textsize":"10px","textOnly":false,"className":"","sticky":true},null]},{"method":"addLayersControl","args":[["Aerial Imagery","Street Map"],[],{"collapsed":false,"autoZIndex":true,"position":"topleft"}]},{"method":"addLegend","args":[{"colors":["darkred"],"labels":["Redd Locations"],"na_color":null,"na_label":"NA","opacity":0.5,"position":"topright","type":"unknown","title":null,"extra":null,"layerId":null,"className":"info legend","group":null}]}],"limits":{"lat":[39.01666444444444,39.516017],"lng":[-121.638,-121.553533]}},"evals":[],"jsHooks":[]}</script>
 </div>
 <div id="variables-of-interest" class="section level3">
 <h3>Variables of Interest</h3>
@@ -7319,6 +7355,45 @@ relevance.</p>
 </div>
 <div id="discussion" class="section level3">
 <h3>Discussion</h3>
+<p>Steelhead presence in the Feather River was strongly influenced by
+local habitat structure, spawning context, and broader spatial and
+seasonal variation. The mixed‐effects logistic regression model that
+included random intercepts for transect location and month performed
+very well (AUC = 0.91), underscoring the importance of accounting for
+both site‐level heterogeneity and seasonal dynamics when modeling
+steelhead occurrence.</p>
+<p>Structural habitat features were the most consistent predictors of
+steelhead presence. Overhanging vegetation, aquatic vegetation, and
+small woody debris were all positively associated with occurrence,
+indicating a strong preference for habitats that provide cover, refuge,
+and hydraulic complexity. These findings align with the ecology of
+juvenile steelhead, which typically select habitats that reduce
+predation risk and energetic costs. In contrast, substrate variables and
+large woody debris did not show strong independent effects once other
+habitat features were considered.</p>
+<p>Spawning context also played a key role. The presence of nearby redds
+and higher total redd counts were both associated with increased
+probabilities of steelhead presence, suggesting spatial coupling between
+spawning and rearing habitats or shared reach‐scale conditions that
+support both life stages. While these effects were strong, they were
+estimated with greater uncertainty than structural habitat
+predictors.</p>
+<p>Hydraulic variables had secondary influence. Velocity showed a
+negative association with steelhead presence, indicating reduced use of
+higher‐velocity habitats when suitable cover was lacking. Depth,
+however, exhibited little effect, suggesting that depth alone is less
+important than habitat complexity.</p>
+<p>Substantial unexplained variation remained at both the site and
+seasonal scales. Random‐effect estimates indicated that some transects
+consistently supported higher baseline probabilities of steelhead
+presence, while others were persistently low, reflecting the influence
+of unmeasured reach‐scale factors such as connectivity, geomorphology,
+or thermal conditions. Strong month‐level effects revealed pronounced
+seasonal structure, with higher occurrence in spring and reduced
+presence later in the season, consistent with outmigration patterns.
+Together, these results highlight the combined importance of fine‐scale
+habitat structure and broader spatial and temporal context in shaping
+steelhead distribution.</p>
 </div>
 </div>
 
