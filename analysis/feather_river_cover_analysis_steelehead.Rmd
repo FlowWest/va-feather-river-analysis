@@ -476,21 +476,61 @@ Because the dataset was imbalanced, with many more absences than
 presences, emphasis was placed on interpreting the confusion matrix in
 conjunction with AUC rather than relying on overall accuracy alone.
 
-Confusion matrises have the following layout where "True" fish presences
-are represented as `val1` and `val4`. "False" positives are represented
-by `val2` as cases where fish presence was predicted but not observed.
-"False" negatives are represented by `val3`.
+Threshold predictive probabilities into 0/1 set at `0.5`.
 
-|                        | Observed Absence (0) | Observed Presence (1) |
-|------------------------|----------------------|-----------------------|
-| Predicted Absence (0)  | `val1`               | `val3`                |
-| Predicted Presence (1) | `val2`               | `val4`                |
+#### Models were evaluated by the following metrics:
 
-Together, these metrics provide complementary perspectives on model
-performance: AUC characterizes overall discriminatory ability
-independent of threshold choice, while the confusion matrix illustrates
-how predictions behave at a specific cutoff and highlights trade-offs
-between detecting presences and avoiding false positives.
+-   **N** Total number of observations used to evaluate the model.
+
+-   **True Positives (TP)** Cases where the model predicted **presence
+    (1)** and fish were actually **present (1)**. *Correct detections.*
+
+-   **False Positives (FP)** Cases where the model predicted **presence
+    (1)** but fish were actually **absent (0)**. *False alarms.*
+
+-   **True Negatives (TN)** Cases where the model predicted **absence
+    (0)** and fish were actually **absent (0)**. *Correct
+    non-detections.*
+
+-   **False Negatives (FN)** Cases where the model predicted **absence
+    (0)** but fish were actually **present (1)**. *Missed detections.*
+
+-   **Accuracy** The overall proportion of correct predictions: (TP +
+    TN) / N Note: Accuracy can appear high when absences are much more
+    common than presences.
+
+-   **Sensitivity (Recall)** Of all true presences, the proportion
+    correctly detected: TP / (TP + FN) Measures how well the model
+    detects fish when they are present.
+
+-   **Specificity** Of all true absences, the proportion correctly
+    predicted as absent: TN / (TN + FP) Measures how well the model
+    avoids false alarms.
+
+-   **Precision (Positive Predictive Value, PPV)** Of all predicted
+    presences, the proportion that are truly present: TP / (TP + FP)
+    Indicates how trustworthy a “presence” prediction is.
+
+-   **Negative Predictive Value (NPV)** Of all predicted absences, the
+    proportion that are truly absent: TN / (TN + FN) Indicates how
+    trustworthy an “absence” prediction is.
+
+-   **Balanced Accuracy** The average of sensitivity and specificity:
+    (Sensitivity + Specificity) / 2 More informative than overall
+    accuracy when classes are imbalanced.
+
+-   **Prevalence** The proportion of observations where fish were
+    present: (TP + FN) / N Represents how common fish presence is in the
+    dataset.
+
+-   **Area Under the Curve (AUC)**AUC refers to the *Area Under the
+    Receiver Operating Characteristic (ROC) Curve*. It measures how well
+    a model can distinguish between presence (1) and absence (0) across
+    all possible probability thresholds, not just one cutoff.
+
+```{r}
+threshold <- 0.5
+```
 
 ## Logistic Regression Approach
 
@@ -539,7 +579,7 @@ Confusion Matrix:
 
 ```{r echo=FALSE}
 # confusion matrix 
-pred_class <- ifelse(pred_prob > 0.5, 1, 0)
+pred_class <- ifelse(pred_prob > threshold, 1, 0)
 con_log <- table(Predicted = pred_class, Observed = obs)
 con_log
 ```
@@ -570,7 +610,7 @@ roc_glmm_loc <- roc(obs, pred_prob_glmm_loc)
 auc(roc_glmm_loc) 
 
 # confusion matrix 
-pred_class_loc <- ifelse(pred_prob_glmm_loc > 0.5, 1, 0)
+pred_class_loc <- ifelse(pred_prob_glmm_loc > threshold, 1, 0)
 con_glmm_loc <- table(Predicted = pred_class_loc, Observed = obs)
 con_glmm_loc 
 ```
@@ -606,7 +646,7 @@ auc(roc_glmm)
 
 ```{r echo=FALSE}
 # confusion matrix 
-pred_class <- ifelse(pred_prob_glmm > 0.5, 1, 0)
+pred_class <- ifelse(pred_prob_glmm > threshold, 1, 0)
 con_glmm_presence <- table(Predicted = pred_class, Observed = obs)
 con_glmm_presence
 ```
@@ -638,7 +678,7 @@ roc_glmm_loc_month <- roc(obs, pred_prob_glmm_loc_month)
 auc(roc_glmm_loc_month) 
 
 # confusion matrix 
-pred_class_loc_month <- ifelse(pred_prob_glmm_loc_month > 0.5, 1, 0)
+pred_class_loc_month <- ifelse(pred_prob_glmm_loc_month > threshold, 1, 0)
 con_glmm_presence_location_month <- table(Predicted = pred_class_loc_month, Observed = obs)
 con_glmm_presence_location_month
 ```
@@ -676,7 +716,7 @@ roc_glmm_loc_month_subset <- roc(obs, pred_prob_glmm_loc_month_subset)
 auc(roc_glmm_loc_month_subset) 
 
 # confusion matrix 
-pred_class_loc_month_subset <- ifelse(pred_prob_glmm_loc_month_subset > 0.5, 1, 0)
+pred_class_loc_month_subset <- ifelse(pred_prob_glmm_loc_month_subset > threshold, 1, 0)
 con_glmm_presence_location_month_subset <- table(Predicted = pred_class_loc_month_subset, Observed = obs)
 con_glmm_presence_location_month_subset
 ```
@@ -723,54 +763,6 @@ metrics_from_cm <- function(cm, model_name, auc) {
 }
 
 ```
-
-**Model** The name or description of the model being evaluated.
-
-**N** Total number of observations used to evaluate the model.
-
-**True Positives (TP)** Cases where the model predicted **presence (1)**
-and fish were actually **present (1)**. *Correct detections.*
-
-**False Positives (FP)** Cases where the model predicted **presence
-(1)** but fish were actually **absent (0)**. *False alarms.*
-
-**True Negatives (TN)** Cases where the model predicted **absence (0)**
-and fish were actually **absent (0)**. *Correct non-detections.*
-
-**False Negatives (FN)** Cases where the model predicted **absence (0)**
-but fish were actually **present (1)**. *Missed detections.*
-
-**Accuracy** The overall proportion of correct predictions: (TP + TN) /
-N Note: Accuracy can appear high when absences are much more common than
-presences.
-
-**Sensitivity (Recall)** Of all true presences, the proportion correctly
-detected: TP / (TP + FN) Measures how well the model detects fish when
-they are present.
-
-**Specificity** Of all true absences, the proportion correctly predicted
-as absent: TN / (TN + FP) Measures how well the model avoids false
-alarms.
-
-**Precision (Positive Predictive Value, PPV)** Of all predicted
-presences, the proportion that are truly present: TP / (TP + FP)
-Indicates how trustworthy a “presence” prediction is.
-
-**Negative Predictive Value (NPV)** Of all predicted absences, the
-proportion that are truly absent: TN / (TN + FN) Indicates how
-trustworthy an “absence” prediction is.
-
-**Balanced Accuracy** The average of sensitivity and specificity:
-(Sensitivity + Specificity) / 2 More informative than overall accuracy
-when classes are imbalanced.
-
-**Prevalence** The proportion of observations where fish were present:
-(TP + FN) / N Represents how common fish presence is in the dataset.
-
-**Area Under the Curve (AUC)**AUC refers to the *Area Under the Receiver
-Operating Characteristic (ROC) Curve*. It measures how well a model can
-distinguish between presence (1) and absence (0) across **all** possible
-probability thresholds, not just one cutoff.
 
 ```{r}
 metrics_from_cm(con_log, "simple logistic regression", round(auc(roc_glm), 3)) |> 
@@ -985,8 +977,9 @@ ggplot(effects_df, aes(x = log_or, y = reorder(term, log_or))) +
 Steelhead presence in the Feather River was strongly influenced by local
 habitat structure, spawning context, and broader spatial and seasonal
 variation. The mixed‐effects logistic regression model that included
-random intercepts for transect location and months March - May performed very well, underscoring the importance of accounting for both site‐level heterogeneity and seasonal dynamics when modeling steelhead
-occurrence.
+random intercepts for transect location and months March - May performed
+very well, underscoring the importance of accounting for both site‐level
+heterogeneity and seasonal dynamics when modeling steelhead occurrence.
 
 Structural habitat features were the most consistent predictors of
 steelhead presence. Overhanging vegetation, aquatic vegetation, and
