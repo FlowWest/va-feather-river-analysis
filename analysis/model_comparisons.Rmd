@@ -41,7 +41,7 @@ Report: [SP F-10 3A FINAL REPORT DISTRIBUTION AND HABITAT USE OF JUVENILE STEELH
 
 ### Differences
 
-| Variable | FERC 2004 Report Findings |  Chinook Model | Steelhead Model |
+| Variable | FERC 2004 Report Findings | Chinook Model | Steelhead Model |
 |------------------|------------------|------------------|------------------|
 | **Depth** | Steelhead associated with shallower margins; Chinook vary by size class | Positive and highly significant effect on presence | Negative and significant effect on presence |
 | **Velocity** | Steelhead avoid higher velocities; prefer lower velocity microhabitats | Strong negative effect on presence | Strong negative effect on presence (larger magnitude than Chinook) |
@@ -53,7 +53,7 @@ Report: [SP F-10 3A FINAL REPORT DISTRIBUTION AND HABITAT USE OF JUVENILE STEELH
 | **Spawning (Redd) Signal** | Not included in models | Redd total significant; redd presence marginal | Redd presence strong; redd total significant |
 | **Temporal Structure** | Seasonal patterns described but not modeled hierarchically | Strong month variance component | Weak month variance component |
 
-### Model Evaluation 
+### Model Evaluation
 
 *How are models evaluated for performance? Are they?*
 
@@ -88,13 +88,21 @@ Report: [SP F-10 3A FINAL REPORT DISTRIBUTION AND HABITAT USE OF JUVENILE STEELH
         | Sensitivity | 37.5%          | 27%          | 14.1%      |
         | Specificity | 83.6%          | 99.5%        | 99.8%      |
 
+-   *Kappa - a measure of all possible outcomes of presence or absence that are predicted correctly, after accounting for chance predictions*
+
+-   *Sensitivity - Measures how well the model detects fish when they are present*
+
+-   *Specificity - Measures how well the model avoids false alarms.*
+
+-   *AUC - Measures how well a model can distinguish between presence and absence across all possible probability thresholds, not just one cutoff*
+
 ```{r eval=FALSE, include=FALSE}
 # for reference, FlowWest models:
 # Steelhead κ ≈ 0.31
 # Chinook κ ≈ 0.23
 ```
 
-### Figures Comparing FlowWest Chinook and Steelhead Models 
+### Figures Comparing FlowWest Chinook and Steelhead Models
 
 **Conallin et al. 2014 - Figure 5**
 
