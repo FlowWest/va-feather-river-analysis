@@ -995,11 +995,7 @@ Spawning activity was positively associated with fish occurrence. The total numb
 
 Together, these results indicate that fish distribution in the study system is governed by an interplay between fine-scale habitat conditions and broader spatial and temporal processes. Structural habitat features—particularly riparian cover and depth—play important roles in shaping local occurrence, while strong seasonal effects and persistent site-level differences underscore the influence of processes operating at larger spatial and temporal scales. The strong performance of the mixed-effects model highlights the value of accounting for repeated sampling, seasonal dynamics, and spatial heterogeneity when modeling fish occurrence in riverine systems.
 
-```{r}
-knitr::knit_exit()
-```
-
-## Figures
+### Supplementatary Figures
 
 **Conallin et al. 2014 - Figure 5**
 
@@ -1016,7 +1012,7 @@ cover_vars <- c(
 
 site_var <- "channel_location"  
 
-df_long <- log_reg_data %>%
+df_long <- log_reg_data |>
   mutate(presence = as.integer(count > 0))  |> 
   select(all_of(site_var), presence, all_of(cover_vars)) |> 
   mutate(across(all_of(cover_vars), ~ as.integer(.x > 0))) |> 
@@ -1056,9 +1052,9 @@ plot_df <- feature_summary |>
   )
 
 ggplot(plot_df, aes(x = feature, y = value)) +
-  geom_col(fill = "darkgreen", alpha = 0.6) +
+  geom_col(fill = "darkblue", alpha = 0.6) +
   facet_grid(panel ~ .data[[site_var]], scales = "free_y") +
-  labs(x = NULL, y = "Value (0–1)", title = "Habitat feature availability, use, and preference by channel location") +
+  labs(x = NULL, y = "Value (0–1)", title = "Chinook - Habitat feature availability, use, and preference by channel location") +
   theme_minimal(base_size = 12) +
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1),
@@ -1066,3 +1062,9 @@ ggplot(plot_df, aes(x = feature, y = value)) +
   )
 
 ```
+
+```{r}
+knitr::knit_exit()
+```
+
+
