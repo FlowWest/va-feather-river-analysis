@@ -421,7 +421,7 @@ percent_threshold <- 20
 # use a hurdle model (Gard 2024); 
 # pre-processing - all numeric values must be rounded to whole numbers
 model_data <- mini_snorkel_model_ready |>
-  select(count, location, channel_location, depth, velocity, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank", month, fl_mm, channel_geomorphic_unit, reach_length, reach_width, channel_type, month) |>
+  select(count, location, channel_location, depth, velocity, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank", month, fl_mm, channel_geomorphic_unit, reach_length, reach_width, channel_type, month, surface_turbidity) |>
   # create new cover variables, based off Gard 2023
   mutate(small_woody = percent_small_woody_cover_inchannel,
          large_woody = percent_large_woody_cover_inchannel,
@@ -553,7 +553,7 @@ A simple logistic regression to start.
 glm_presence <- glm(
   presence ~ small_woody + depth + velocity + large_woody +
     aquatic_veg + overhanging_veg + cobble_substrate +
-    boulder_substrate + undercut_bank + redd_total + redd_presence,
+    boulder_substrate + undercut_bank + redd_total + redd_presence + surface_turbidity,
   data = log_reg_data,
   family = binomial(link = "logit")
 )
@@ -595,7 +595,7 @@ Using the high flow, low flow channel as the random effect:
 glmm_presence_location <- glmmTMB(
   presence ~ small_woody + depth + velocity + large_woody +
     aquatic_veg + overhanging_veg + cobble_substrate +
-    boulder_substrate + undercut_bank + redd_total + redd_presence + 
+    boulder_substrate + undercut_bank + redd_total + redd_presence + surface_turbidity + 
     (1 | location),                     
   data = log_reg_data,
   family = binomial(link = "logit")
@@ -625,7 +625,7 @@ the random effect:
 glmm_presence <- glmmTMB(
   presence ~ small_woody + depth + velocity + large_woody +
     aquatic_veg + overhanging_veg + cobble_substrate +
-    boulder_substrate + undercut_bank + redd_total + redd_presence + 
+    boulder_substrate + undercut_bank + redd_total + redd_presence + surface_turbidity + 
     (1 | channel_location/location),                     
   data = log_reg_data,
   family = binomial(link = "logit")
@@ -663,7 +663,7 @@ flow channel, it is unsurprising that location is a better predictor.
 glmm_presence_location_month <- glmmTMB(
   presence ~ small_woody + depth + velocity + large_woody +
     aquatic_veg + overhanging_veg + cobble_substrate +
-    boulder_substrate + undercut_bank + redd_total + redd_presence + 
+    boulder_substrate + undercut_bank + redd_total + redd_presence + surface_turbidity + 
     (1 | location) + (1 | month),                     
   data = log_reg_data,
   family = binomial(link = "logit")
@@ -701,7 +701,7 @@ log_data_month_subset <- log_reg_data |>
 glmm_presence_location_month_subset <- glmmTMB(
   presence ~ small_woody + depth + velocity + large_woody +
     aquatic_veg + overhanging_veg + cobble_substrate +
-    boulder_substrate + undercut_bank + redd_total + redd_presence + 
+    boulder_substrate + undercut_bank + redd_total + redd_presence + surface_turbidity + 
     (1 | location) + (1 | month),                     
   data = log_data_month_subset,
   family = binomial(link = "logit")
@@ -908,7 +908,8 @@ effects_df <- broom::tidy(glmm_presence_location_month_subset, conf.int = TRUE) 
                   depth = "Depth*",
                   velocity = "Velocity*",
                   redd_total = "Total Number or Redd*",
-                  redd_presence = "Redds Nearby*"
+                  redd_presence = "Redds Nearby*",
+                  surface_turbidity = "Surface Turbulence"
     )
   )
 
@@ -954,7 +955,8 @@ effects_df <- broom::tidy(glmm_presence_location_month_subset, conf.int = TRUE) 
       depth             = "Depth*",
       velocity          = "Velocity*",
       redd_total        = "Total Number of Redd*",
-      redd_presence     = "Redds Nearby*"
+      redd_presence     = "Redds Nearby*",
+      surface_turbidity = "Surface Turbulence"
     )
   )
 
