@@ -50,6 +50,13 @@ location_order <- tibble(location = c("hatchery ditch", "hour bars", "hatchery r
                                    18,7,10,13,
                                    14,17,25,13))
 
+steelhead_redds <- read_rds(here::here("visualizations","steelhead_redd_summary.rds")) |> 
+  mutate(species = "steelhead trout (clipped)") 
+chinook_redds <- read_rds(here::here("visualizations","chinook_redd_summary.rds")) |> 
+  mutate(species = "chinook salmon") 
+
+all_redds <- bind_rows(steelhead_redds, chinook_redds)
+
 feather_cover <- mini_fish_raw |> 
   left_join(mini_locations_raw |> 
               distinct(location_table_id, date, channel_location, location)) |> 
@@ -63,26 +70,39 @@ feather_cover <- mini_fish_raw |>
          overhanging_veg = percent_cover_half_meter_overhead + percent_cover_more_than_half_meter_overhead) |> 
   select(micro_hab_data_tbl_id, location_table_id, transect_code, location,
          small_woody_debris:overhanging_veg, count, date, depth, velocity, species) |>
-  pivot_longer(cols = c(small_woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg, depth, velocity), names_to = "cover_type", 
+  left_join(all_redds, by = c("location", "species"))  |> 
+  pivot_longer(cols = c(small_woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg, depth, velocity, redd_presence, redd_total), names_to = "cover_type", 
                values_to = "percent_cover") |>  
   distinct() |> 
   left_join(location_order) |> 
   mutate(fish_presence = ifelse(count > 0, "Yes", "No")) |> select(-count) |> 
   mutate(location_table_id = paste0(date, " (location id: ", location_table_id, ")")) |> 
-  filter(species %in% c("chinook salmon" , "steelhead trout (wild)", "steelhead trout, (clipped)"))
+  filter(species %in% c("chinook salmon" , "steelhead trout (wild)", "steelhead trout, (clipped)")) 
 
 summary_cover <- feather_cover |> 
-  mutate(month = month(date, label = T)) |> 
+  mutate(month = lubridate::month(date, label = TRUE)) |> 
   group_by(location, cover_type, order, fish_presence, month, species) |> 
-  summarize(mean_percent_cover = mean(percent_cover, na.rm = T),
-            median_percent_cover = median(percent_cover, na.rm = T),
-            min_percent_cover = min(percent_cover, na.rm = T),
-            max_percent_cover = max(percent_cover, na.rm = T)) |> 
+  summarize(
+    mean_percent_cover = if (first(cover_type) %in% c("redd_presence", "redd_total")) {
+      max(percent_cover, na.rm = TRUE)
+    } else {
+      mean(percent_cover, na.rm = TRUE)
+    },
+    median_percent_cover = if (first(cover_type) %in% c("redd_presence", "redd_total")) {
+      max(percent_cover, na.rm = TRUE)
+    } else {
+      median(percent_cover, na.rm = TRUE)
+    },
+    min_percent_cover = min(percent_cover, na.rm = TRUE),
+    max_percent_cover = max(percent_cover, na.rm = TRUE),
+    .groups = "drop"
+  ) |> 
   mutate(mean_percent_cover = ifelse(is.na(mean_percent_cover), 0, mean_percent_cover))
 
 location_summary <- feather_cover |> 
   group_by(location, cover_type, species) |> 
-  summarize(mean_percent_cover = mean(percent_cover, na.rm = T))
+  summarize(mean_percent_cover = mean(percent_cover, na.rm = T)) |> 
+  mutate(mean_percent_cover = ifelse(is.na(mean_percent_cover), 0, mean_percent_cover))
 
 locations_sf <- mini_locations_raw |>
   distinct(location_table_id, date, channel_location, .keep_all = TRUE) |>
@@ -94,13 +114,13 @@ locations_sf <- mini_locations_raw |>
   select(location) |> 
   left_join(location_summary)
 
+
 ```
 
 ```{r}
-# TODO: need to add redds 
-imp_steelhead_pred <- c('redds_nearby', 'overhanging_veg', 'aquatic_veg', 'small_woody_debris', 'total_redds', 'depth', 'velocity')
+imp_steelhead_pred <- c('redd_presence', 'overhanging_veg', 'aquatic_veg', 'small_woody_debris', 'redd_total', 'depth', 'velocity')
 
-imp_chinook_pred <- c("overhanging_veg", "depth", "total_redds", "velocity")
+imp_chinook_pred <- c("overhanging_veg", "depth", "redd_total", "velocity")
 ```
 
 # About the Tool 
@@ -375,10 +395,11 @@ output$attribute_plot <- renderPlot({
         }
       )
     
+    
     ggplot(summary_cover_filter,
            aes(x = month, y = reorder(location, order, decreasing = T), fill = mean_percent_cover)) +
-      geom_tile() +
-      scale_fill_viridis_c() +
+      geom_tile(alpha = 0.8, color = "darkgrey") +
+      scale_fill_viridis_c(option = "mako") + 
       labs(y = "River location", x = "Month", fill = input$predictor_id) + 
       theme_minimal() + 
       theme(
