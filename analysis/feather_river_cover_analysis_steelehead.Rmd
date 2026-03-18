@@ -222,7 +222,12 @@ redd_data_with_redds |>
 redd_data_by_location <- redd_data_with_redds |> 
   rename(date_redd = date) |> 
   filter(!is.na(lat)) |> 
-  sf::st_as_sf(coords = c("long", "lat"), crs = 4326)
+  sf::st_as_sf(coords = c("long", "lat"), crs = 4326) 
+
+# steelhead_raw_redds <- redd_data_by_location |> 
+#   group_by(location) |> 
+#   summarise(total_redds = sum(number_redds, na.rm = T)) |> 
+#   saveRDS(here::here("visualizations", "raw_redd_location_steelhead.rds"))
 
 leaflet() |> 
   addProviderTiles(providers$Esri.WorldImagery, group = "Aerial Imagery") |>
