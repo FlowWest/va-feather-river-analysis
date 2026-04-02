@@ -137,39 +137,24 @@ locations_sf <- mini_locations_raw |>
 ```
 
 ```{r}
-imp_steelhead_pred <- c('redd_presence', 'overhanging_veg', 'aquatic_veg', 'small_woody_debris', 'redd_total', 'depth', 'velocity')
+imp_steelhead_pred <- c('overhanging_veg', 'aquatic_veg', 'small_woody_debris', 'depth', 'velocity')
 
-imp_chinook_pred <- c("overhanging_veg", "depth", "redd_total", "velocity")
+imp_chinook_pred <- c("overhanging_veg", "depth", "velocity")
 ```
 
 # About the Tool 
 
 #### About the Tool 
 
-The purpose of this tool is to show the spatial and temporal variability in cover within the Feather River system using 2001 and 2002 mini snorkel data. For both species, only important predictors are options to view based on logistic regression results from a prior analysis.
-
-TODO: link to EDI
-
-TODO: link to prior app
-
-TODO: link to analyses
-
-#### Habitat Map
-
-This map shows all sampling locations, however note that there are mutliple transect locations within each sampling location point that are not represented. Color and size represent the average of selected predictor.
-
-#### Cover Plot
-
-Plot represents the temporal and cover variability of each predictor. The bars range from minimum to maximum and the points are the mean. Values are summarized by each location over all transects.
+The purpose of this tool is to show the spatial and temporal variability in cover within the Feather River system using [2001 and 2002 mini snorkel data](https://portal.edirepository.org/nis/metadataviewer?packageid=edi.1705.3). For both species, only important predictors are available to view, based on logistic regression results from a prior analysis — overhanging vegetation, aquatic vegetation, small woody debris, depth, and velocity for steelhead trout, and overhanging vegetation, depth, and velocity for Chinook salmon. The tool is designed to help users understand how the reach-level distribution of these important habitat variables relates to known spawning locations: redd presence and total redd counts are included as overlay options so that areas of high spawning activity can be compared directly against locations where key habitat conditions are most favorable. This allows users to evaluate spatial alignment (or misalignment) between habitat quality — as identified by the logistic regressions — and actual spawning use across the Feather River.
 
 # View Analysis Inputs {#view-data data-orientation="rows"}
 
 ## Row {data-height="25"}
 
 ```{r}
-# Add the radio buttons with a help icon
 tags$div(
-  tags$strong("Choose which model you want to view:"),
+  tags$strong("Cover associated with: "),
   tags$span(
     class = "help-icon", 
     shiny::icon("question-circle"), 
@@ -273,12 +258,28 @@ output$map <- renderLeaflet({
       if (input$predictor_id %in% c("redd_total", "redd_presence")) {
         species %in% species_filter
       } else {
-        (species %in% species_filter) | is.na(species)
+        (species %in% species_filter) 
       }
     )
   
-  pal <- colorBin("YlOrRd", map_data$mean_percent_cover, bins = 5)
+  print(map_data |> head())
   
+  predictor_label <- switch(input$predictor_id,
+    depth    = "Depth (m)",
+    velocity = "Velocity (ft/s)",
+    aquatic_veg = "Aquatic Veg (%)",
+    overhanging_veg = "Overhanging Veg (%)",
+    small_woody_debris = "Small Woody Debris (%)"
+  )
+
+  # unit_suffix <- switch(input$predictor_id,
+  #   depth    = " meters",
+  #   velocity = " ft/s",
+  #   ""
+  # )
+
+  pal <- colorBin("YlOrRd", domain = map_data$mean_percent_cover, bins = 5, pretty = FALSE)
+
   radius_vals <- if (input$predictor_id == "redd_total") {
     scales::rescale(sqrt(map_data$mean_percent_cover), to = c(4, 20))
   } else {
@@ -290,18 +291,23 @@ output$map <- renderLeaflet({
     addProviderTiles(providers$OpenStreetMap, group = "Street Map") |>
     addCircleMarkers(
       layerId = ~location,
-      color = "darkblue",
+      color = ~pal(mean_percent_cover),
       fillColor = ~pal(mean_percent_cover),
       radius = radius_vals,
       fill = TRUE,
       fillOpacity = 0.9,
-      opacity = 0.5,
+      weight = 1,
+      opacity = 0.8,
       label = ~location,
       labelOptions = labelOptions(
         style = list("font-weight" = "bold", padding = "3px 8px"),
         textsize = "10px",
         direction = "auto",
         noHide = FALSE
+      ),
+      popup = ~paste0(
+        "<b>Location:</b> ", location, "<br>",
+        "<b>", predictor_label, ":</b> ", round(mean_percent_cover, 2)
       )
     ) |>
     addCircleMarkers(
@@ -338,14 +344,14 @@ output$map <- renderLeaflet({
         "raw steelhead redd locations",
         "raw chinook redd locations"
       ),
-      position = "topleft",
-      options = layersControlOptions(collapsed = FALSE)
+      position = "topright",
+      options = layersControlOptions(collapsed = TRUE)
     ) |>
     addLegend(
       "bottomright",
       pal = pal,
       values = map_data$mean_percent_cover,
-      title = input$predictor_id
+      title = predictor_label
     ) |> 
     hideGroup("raw steelhead redd locations") |> 
     hideGroup("raw chinook redd locations")
@@ -428,7 +434,7 @@ output$attribute_plot <- renderPlot({
     } else if (input$predictor_id == "depth") {
       "Depth (meters)"
     } else if (input$predictor_id == "velocity") {
-      "Velocity (m/s)"
+      "Velocity (ft/s)"
     } else if (input$predictor_id == "redd_total") {
       "Total number of Redds"
     } else if (input$predictor_id == "redd_presence") {
@@ -485,7 +491,7 @@ output$attribute_plot <- renderPlot({
     } else if (input$predictor_id == "depth") {
       "Depth (meters)"
     } else if (input$predictor_id == "velocity") {
-      "Velocity (m/s)"
+      "Velocity (ft/s)"
     } else if (input$predictor_id == "redd_total") {
       "Total number of Redds"
     } else if (input$predictor_id == "redd_presence") {
@@ -495,7 +501,7 @@ output$attribute_plot <- renderPlot({
     ggplot(summary_cover_filter,
            aes(x = month, y = reorder(location, order, decreasing = T), fill = mean_percent_cover)) +
       geom_tile(alpha = 0.8, color = "darkgrey") +
-      scale_fill_viridis_c(option = "mako") + 
+      scale_fill_distiller(palette = "YlOrRd", direction = 1) +
       labs(y = "River location", x = "Month", fill = label) + 
       theme_minimal() + 
       theme(

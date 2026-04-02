@@ -200,6 +200,11 @@ redd_data_by_location <- redd_data |>
   filter(!is.na(longitude)) |> 
   sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
 
+# chinook_raw_redds <- redd_data_by_location |> 
+#   group_by(location) |> 
+#   summarise(total_redds = sum(number_redds, na.rm = T)) |> 
+#   saveRDS(here::here("visualizations", "raw_redd_location_chinook.rds"))
+
 # redd_data_by_location |> 
 #   ggplot(aes(x = location, y = n_redds)) +
 #   geom_col() +
