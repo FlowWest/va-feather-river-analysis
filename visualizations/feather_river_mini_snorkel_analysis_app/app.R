@@ -130,7 +130,7 @@ term_labels <- c(
 # ── UI ────────────────────────────────────────────────────────────────────────
 ui <- page_navbar(
   title = span(
-    style = "font-family: 'Georgia', serif; font-size: 1.05rem; letter-spacing: 0.02em;",
+    style = "font-family: 'Georgia', serif; font-size: 1.05rem; letter-spacing: 0.02em; color: #333232;",
     "Feather River — Logistic Regression Analysis"
   ),
   theme = bs_theme(
@@ -634,9 +634,10 @@ server <- function(input, output, session) {
       filter(group == "month") |>
       rename(unit = level, re = estimate) |>
       mutate(odds_ratio = exp(re), or_low = exp(conf.low), or_high = exp(conf.high),
-             unit = paste("Month", unit)) |>
-      arrange(odds_ratio) |>
-      mutate(unit = factor(unit, levels = unit))
+             month_num = as.integer(unit),
+             unit = factor(paste("Month", unit),
+                           levels = rev(paste("Month", sort(as.integer(unique(unit)))))))|>
+      arrange(month_num)
     ggplot(month_df, aes(x = odds_ratio, y = unit)) +
       geom_vline(xintercept = 1, linetype = 2, color = "gray50") +
       geom_point(size = 2.5, color = "#0072B2") +
@@ -718,6 +719,7 @@ server <- function(input, output, session) {
   })
   
   # ── RESULTS / DISCUSSION ───────────────────────────────────────────────────
+  # ── RESULTS / DISCUSSION ───────────────────────────────────────────────────
   output$discussion_full <- renderUI({
     sp  <- sp_label()
     spc <- input$species
@@ -754,110 +756,98 @@ server <- function(input, output, session) {
     div(style = "max-width:1100px;",
         
         # 1. Cover Is Important
-        div(class = "card mb-4",
-            div(class = "card-header bg-primary text-white",
-                h4(style = "margin:0;", paste("1. Cover Is Important —", sp))),
-            div(class = "card-body",
-                p(class = "text-muted fst-italic",
-                  "Finding: Cover increases the probability of juvenile fish presence,
-             but its effect is modulated by spatial and temporal context."),
-                cover_finding
-            )
-        ),
+        h4(paste("Cover Is Important —", sp)),
+        p(class = "text-muted fst-italic",
+          "Finding: Cover increases the probability of juvenile fish presence,
+         but its effect is modulated by spatial and temporal context."),
+        cover_finding,
+        hr(),
         
         # 2. Study Design
-        div(class = "card mb-4",
-            div(class = "card-header bg-secondary text-white",
-                h4(style = "margin:0;", "2. Study Design & Data Skewness")),
-            div(class = "card-body",
-                fluidRow(
-                  column(6,
-                         h5("Zero-inflation and class imbalance"),
-                         p(paste0("Fish presence records comprise only ", prevalence,
-                                  "% of all observations (", format(n_present, big.mark = ","),
-                                  " of ", format(n_obs, big.mark = ","), " total). ",
-                                  "This extreme class imbalance means overall accuracy is misleading — a model
-                       that predicts all absences would be highly accurate but useless.")),
-                         tags$ul(
-                           tags$li("AUC and balanced accuracy are the preferred performance metrics."),
-                           tags$li("Sensitivity (correctly detecting true presences) is low at the
-                         default 0.5 classification threshold."),
-                           tags$li("A hurdle model was evaluated for count data but performed poorly —
-                         count variability was too high and zero-inflation too severe.")
-                         )
-                  ),
-                  column(6,
-                         h5("Temporal mismatch"),
-                         p("Mini Snorkel surveys were conducted in 2001–2002. Redd data span 2014–2023
-                 (Chinook) and ongoing (Steelhead). The redd-fish spatial correlation is
-                 interpreted as a", em("spatial pattern only"),
-                           "— not a contemporaneous relationship."),
-                         hr(),
-                         h5("Binary cover variables"),
-                         p("Cover and substrate variables measured as percentages were binarized at a",
-                           strong(paste0(percent_threshold, "% threshold")), "for modeling. Key predictors
-                 remain consistent across threshold values tested."),
-                         hr(),
-                         h5("Survey design"),
-                         p("Fixed transect snorkel surveys across March–August. Not all sites were surveyed
-                 in all months — random effects for month help account for this unbalanced
-                 sampling structure.")
-                  )
-                )
-            )
+        h4("Study Design & Data Skewness"),
+        fluidRow(
+          column(6,
+                 h5("Zero-inflation and class imbalance"),
+                 p(paste0("Fish presence records comprise only ", prevalence,
+                          "% of all observations (", format(n_present, big.mark = ","),
+                          " of ", format(n_obs, big.mark = ","), " total). ",
+                          "This extreme class imbalance means overall accuracy is misleading — a model
+                   that predicts all absences would be highly accurate but useless.")),
+                 tags$ul(
+                   tags$li("AUC and balanced accuracy are the preferred performance metrics."),
+                   tags$li("Sensitivity (correctly detecting true presences) is low at the
+                     default 0.5 classification threshold."),
+                   tags$li("A hurdle model was evaluated for count data but performed poorly —
+                     count variability was too high and zero-inflation too severe.")
+                 )
+          ),
+          column(6,
+                 h5("Temporal mismatch"),
+                 p("Mini Snorkel surveys were conducted in 2001–2002. Redd data span 2014–2023
+             (Chinook) and ongoing (Steelhead). The redd-fish spatial correlation is
+             interpreted as a", em("spatial pattern only"),
+                   "— not a contemporaneous relationship."),
+                 hr(),
+                 h5("Binary cover variables"),
+                 p("Cover and substrate variables measured as percentages were binarized at a",
+                   strong(paste0(percent_threshold, "% threshold")), "for modeling. Key predictors
+             remain consistent across threshold values tested."),
+                 hr(),
+                 h5("Survey design"),
+                 p("Fixed transect snorkel surveys across March–August. Not all sites were surveyed
+             in all months — random effects for month help account for this unbalanced
+             sampling structure.")
+          )
         ),
+        hr(),
         
         # 3. Spatial Coupling
-        div(class = "card mb-4",
-            div(class = "card-header text-white", style = "background-color:#2c6e49;",
-                h4(style = "margin:0;", paste("3. Spatial Coupling with Redds —", sp))),
-            div(class = "card-body",
-                p(class = "text-muted fst-italic",
-                  "Finding: Juvenile fish presence is spatially associated with redd locations,
-             but this coupling is not uniform across all sites and months."),
-                fluidRow(
-                  column(6,
-                         h5("What the models show"),
-                         tags$ul(
-                           tags$li(strong("Total redd count (redd_total):"),
-                                   "positive and significant — reaches with greater cumulative redd
-                         activity tend to have higher juvenile presence probability."),
-                           tags$li(strong("Binary redd presence (redd_presence):"),
-                                   "positive but not always significant — redd", em("intensity"),
-                                   "(count) is more informative than simple presence/absence of spawning.")
-                         ),
-                         br(), h5("Mechanisms"),
-                         tags$ol(
-                           tags$li(strong("Parent-offspring proximity:"),
-                                   "Juveniles emerge and rear near where adults spawned. Reaches with
-                         higher spawning intensity produce more juveniles locally."),
-                           tags$li(strong("Shared habitat quality:"),
-                                   "Reaches that attract spawning adults may also provide good rearing
-                         habitat — the correlation partly reflects shared suitability rather
-                         than a strict parent-offspring link.")
-                         )
-                  ),
-                  column(6,
-                         h5("When the coupling breaks down"),
-                         p("The redd-juvenile coupling is not universal. Site random effects show high
-                 variability in baseline presence probabilities", em("independent"),
-                           "of redd counts."),
-                         tags$ul(
-                           tags$li("Thermal conditions (summer warming) may limit rearing suitability
-                         in reaches that support cold-water spawning."),
-                           tags$li("Downstream connectivity — juveniles may disperse from natal reaches
-                         to better rearing habitat."),
-                           tags$li("Competition and density dependence — high spawning-area density may
-                         not translate proportionally to higher juvenile counts."),
-                           tags$li("River size and project footprint — larger reaches have greater spatial
-                         heterogeneity in redd-to-rearing habitat proximity.")
-                         )
-                  )
-                )
-            )
+        h4(paste("Spatial Coupling with Redds —", sp)),
+        p(class = "text-muted fst-italic",
+          "Finding: Juvenile fish presence is spatially associated with redd locations,
+         but this coupling is not uniform across all sites and months."),
+        fluidRow(
+          column(6,
+                 h5("What the models show"),
+                 tags$ul(
+                   tags$li(strong("Total redd count (redd_total):"),
+                           "positive and significant — reaches with greater cumulative redd
+                     activity tend to have higher juvenile presence probability."),
+                   tags$li(strong("Binary redd presence (redd_presence):"),
+                           "positive but not always significant — redd", em("intensity"),
+                           "(count) is more informative than simple presence/absence of spawning.")
+                 ),
+                 br(), h5("Mechanisms"),
+                 tags$ol(
+                   tags$li(strong("Parent-offspring proximity:"),
+                           "Juveniles emerge and rear near where adults spawned. Reaches with
+                     higher spawning intensity produce more juveniles locally."),
+                   tags$li(strong("Shared habitat quality:"),
+                           "Reaches that attract spawning adults may also provide good rearing
+                     habitat — the correlation partly reflects shared suitability rather
+                     than a strict parent-offspring link.")
+                 )
+          ),
+          column(6,
+                 h5("When the coupling breaks down"),
+                 p("The redd-juvenile coupling is not universal. Site random effects show high
+             variability in baseline presence probabilities", em("independent"),
+                   "of redd counts."),
+                 tags$ul(
+                   tags$li("Thermal conditions (summer warming) may limit rearing suitability
+                     in reaches that support cold-water spawning."),
+                   tags$li("Downstream connectivity — juveniles may disperse from natal reaches
+                     to better rearing habitat."),
+                   tags$li("Competition and density dependence — high spawning-area density may
+                     not translate proportionally to higher juvenile counts."),
+                   tags$li("River size and project footprint — larger reaches have greater spatial
+                     heterogeneity in redd-to-rearing habitat proximity.")
+                 )
+          )
         )
     )
   })
+  
 }
 
 shinyApp(ui, server)

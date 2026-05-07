@@ -42,7 +42,7 @@ Report: [SP F-10 3A FINAL REPORT DISTRIBUTION AND HABITAT USE OF JUVENILE STEELH
 ### Differences
 
 | Variable | FERC 2004 Report Findings | Chinook Model | Steelhead Model |
-|------------------|------------------|------------------|------------------|
+|----|----|----|----|
 | **Depth** | Steelhead associated with shallower margins; Chinook vary by size class | Positive and highly significant effect on presence | Negative and significant effect on presence |
 | **Velocity** | Steelhead avoid higher velocities; prefer lower velocity microhabitats | Strong negative effect on presence | Strong negative effect on presence (larger magnitude than Chinook) |
 | **Substrate** | Gravel/cobble more frequently used than fine substrates | Cobble and boulder not significant once hydraulics included | Substrate not significant once hydraulics included |
