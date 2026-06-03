@@ -5,8 +5,9 @@ account: flowwest
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 17319986
-bundleId: 11964795
+bundleId: 12029094
 url: https://flowwest.shinyapps.io/feather_analysis_overview/
 version: 1
 asMultiple: FALSE
 asStatic: FALSE
+ignoredFiles: www/about.html

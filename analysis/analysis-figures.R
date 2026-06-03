@@ -5,7 +5,7 @@
 #
 # Output (saved to figures/):
 #   chinook_hsi_lfc_hfc.png          – HA/HU/HSI by channel (HFC vs LFC)
-#   chinook_hsi_locations_boxplot.png – HA/HU/HSI variability across locations
+#   chinook_hsi_locations_boxplot.png – HA/HU/HSI variability across locations (violin)
 #   steelhead_hsi_lfc_hfc.png
 #   steelhead_hsi_locations.png
 
@@ -113,6 +113,8 @@ prep_model_data <- function(mini_snorkel_raw, redd_summary) {
 
 # ── helper: compute HA / HU / HSI for a given grouping variable ───────────────
 
+panel_levels <- c("HA (availability)", "HU (utilization)", "HSI (preference)")
+
 compute_hsi <- function(log_reg_data, site_var) {
   df_long <- log_reg_data |>
     select(all_of(site_var), presence, all_of(cover_vars)) |>
@@ -146,6 +148,7 @@ compute_hsi <- function(log_reg_data, site_var) {
                        HA      = "HA (availability)",
                        HU      = "HU (utilization)",
                        HSI_raw = "HSI (preference)"),
+      panel   = factor(panel, levels = panel_levels),
       feature = str_replace_all(feature, "_", " "),
       feature = if_else(feature == "surface turbidity", "surface turbulence", feature)
     )
@@ -180,13 +183,15 @@ plot_hsi_channel <- function(log_reg_data, title) {
     theme_hsi()
 }
 
-# Boxplot: HA / HU / HSI variability across locations (chinook style)
+# Violin: HA / HU / HSI variability across locations (chinook style)
 plot_hsi_locations_boxplot <- function(log_reg_data, title) {
   compute_hsi(log_reg_data, "location") |>
-    ggplot(aes(x = value, y = feature)) +
-    geom_boxplot() +
+    ggplot(aes(x = feature, y = value)) +
+    geom_violin(fill = "grey70", color = "grey40", alpha = 0.7, scale = "width") +
+    geom_boxplot(width = 0.15, outlier.shape = NA, fill = "white", color = "grey30") +
+    coord_flip() +
     facet_wrap(~panel, ncol = 1) +
-    labs(x = "Value (0–1)", y = NULL, title = title) +
+    labs(y = "Value (0–1)", x = NULL, title = title) +
     theme_hsi() +
     theme(axis.text.x = element_text(angle = 0, size = 12))
 }
@@ -205,6 +210,57 @@ plot_hsi_locations_jitter <- function(log_reg_data, title) {
          subtitle = "Points = locations; diamond = mean") +
     theme_hsi() +
     theme(axis.text.x = element_text(angle = 0, size = 12))
+}
+
+# Scatter: depth × velocity, shape = species/presence, color = week of year, facet = cover
+plot_depth_velocity_scatter <- function(mini_snorkel_chinook, mini_snorkel_steelhead,
+                                         pct_thresh = percent_threshold) {
+  add_cover_cols <- function(df) {
+    df |>
+      filter(!is.na(depth), !is.na(velocity), !is.na(date)) |>
+      mutate(
+        any_cover = (
+          coalesce(percent_small_woody_cover_inchannel, 0)                         >= pct_thresh |
+          coalesce(percent_large_woody_cover_inchannel, 0)                         >= pct_thresh |
+          (coalesce(percent_cover_half_meter_overhead, 0) +
+           coalesce(percent_cover_more_than_half_meter_overhead, 0))               >= pct_thresh |
+          coalesce(percent_undercut_bank, 0)                                       >= pct_thresh |
+          coalesce(percent_submerged_aquatic_veg_inchannel, 0)                     >= pct_thresh |
+          coalesce(percent_boulder_substrate, 0)                                   >= pct_thresh |
+          coalesce(percent_cobble_substrate, 0)                                    >= pct_thresh |
+          coalesce(surface_turbidity, 0)                                           >  0
+        ),
+        week_of_year = lubridate::week(date),
+        cover_panel  = if_else(any_cover, "Cover present", "Cover < 20%")
+      )
+  }
+
+  ch <- add_cover_cols(mini_snorkel_chinook)
+  sh <- add_cover_cols(mini_snorkel_steelhead)
+
+  bind_rows(
+    ch |> filter(count > 0) |> mutate(species_cat = "Chinook Salmon"),
+    sh |> filter(count > 0) |> mutate(species_cat = "Steelhead"),
+  ) |>
+    filter(count > 0) |> 
+    mutate(
+      species_cat = factor(species_cat, levels = c("Chinook Salmon", "Steelhead")),
+      cover_panel = factor(cover_panel, levels = c("Cover < 20%", "Cover present"))
+    ) |>
+    ggplot(aes(x = depth, y = velocity, shape = species_cat, color = week_of_year)) +
+    geom_point(alpha = 0.55, size = 2) +
+    scale_shape_manual(
+      values = c("Chinook Salmon" = 16, "Steelhead" = 17),
+      name   = NULL
+    ) +
+    scale_color_viridis_c(name = "Week of year", option = "plasma") +
+    facet_wrap(~cover_panel) +
+    labs(x = "Depth (cm)", y = "Velocity (m/s)") +
+    theme_hsi() +
+    theme(
+      legend.position = "right",
+      axis.text.x     = element_text(angle = 0, size = 10)
+    )
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -285,4 +341,152 @@ ggsave(
   plot_hsi_locations_jitter(log_reg_steelhead,
     "Steelhead habitat: habitat variability across locations"),
   width = 12, height = 9, dpi = 300, bg = "white"
+)
+
+# Figure S5: HSI across locations (violin)
+ggsave(
+  here("figures", "steelhead_hsi_locations_violin.png"),
+  plot_hsi_locations_boxplot(log_reg_steelhead,
+    "Steelhead habitat: habitat variability across locations"),
+  width = 12, height = 9, dpi = 300, bg = "white"
+)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# COMBINED FIGURES (Chinook + Steelhead)
+# ══════════════════════════════════════════════════════════════════════════════
+
+species_fills <- c("Chinook Salmon" = "grey30", "Steelhead" = "grey75")
+
+plot_hsi_combined_locations <- function(log_reg_chinook, log_reg_steelhead) {
+  bind_rows(
+    compute_hsi(log_reg_chinook,   "location") |> mutate(species = "Chinook Salmon"),
+    compute_hsi(log_reg_steelhead, "location") |> mutate(species = "Steelhead")
+  ) |>
+    mutate(species = factor(species, levels = names(species_fills))) |>
+    ggplot(aes(x = feature, y = value, fill = species)) +
+    geom_violin(position = position_dodge(0.8), width = 0.75, alpha = 0.8, scale = "width") +
+    geom_boxplot(aes(group = interaction(feature, species)),
+                 position = position_dodge(0.8), width = 0.15,
+                 outlier.shape = NA, fill = "white", alpha = 0.9) +
+    coord_flip() +
+    facet_wrap(~panel, ncol = 1) +
+    scale_fill_manual(values = species_fills, name = NULL) +
+    labs(y = "Value (0–1)", x = NULL) +
+    theme_hsi() +
+    theme(
+      axis.text.x     = element_text(angle = 0, size = 12),
+      legend.position = "top",
+      legend.text     = element_text(size = 12)
+    )
+}
+
+plot_hsi_combined_channel <- function(log_reg_chinook, log_reg_steelhead) {
+  bind_rows(
+    compute_hsi(log_reg_chinook,   "channel_location") |> mutate(species = "Chinook Salmon"),
+    compute_hsi(log_reg_steelhead, "channel_location") |> mutate(species = "Steelhead")
+  ) |>
+    mutate(species = factor(species, levels = names(species_fills))) |>
+    ggplot(aes(x = feature, y = value, fill = species)) +
+    geom_col(position = position_dodge(0.75), width = 0.7) +
+    facet_grid(panel ~ channel_location, scales = "free_y") +
+    scale_fill_manual(values = species_fills, name = NULL) +
+    labs(x = NULL, y = "Value (0–1)") +
+    theme_hsi() +
+    theme(
+      legend.position = "top",
+      legend.text     = element_text(size = 12)
+    )
+}
+
+# Figure 1: Combined locations boxplot
+ggsave(
+  here("figures", "combined_hsi_locations.png"),
+  plot_hsi_combined_locations(log_reg_chinook, log_reg_steelhead),
+  width = 10, height = 12, dpi = 300, bg = "white"
+)
+
+# Figure 2: Combined channel bar chart
+ggsave(
+  here("figures", "combined_hsi_lfc_hfc.png"),
+  plot_hsi_combined_channel(log_reg_chinook, log_reg_steelhead),
+  width = 14, height = 10, dpi = 300, bg = "white"
+)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DEPTH × VELOCITY WITH FISH PRESENCE (cover vs no cover)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Builds a scatter of depth × velocity for both species combined.
+# Symbol shape/fill encodes species × presence (open = absent, filled = present).
+# Color encodes day of year. Two panels split by whether any cover type exceeds
+# the percent_threshold used throughout this analysis.
+
+plot_depth_velocity <- function(mini_snorkel_chinook, mini_snorkel_steelhead,
+                                pct_thresh = percent_threshold) {
+  prep_dv <- function(df, species_label) {
+    df |>
+      filter(!is.na(depth), !is.na(velocity)) |>
+      mutate(
+        any_cover = (
+          coalesce(percent_small_woody_cover_inchannel, 0)     >= pct_thresh |
+            coalesce(percent_large_woody_cover_inchannel, 0)     >= pct_thresh |
+            coalesce(percent_cover_half_meter_overhead, 0) +
+            coalesce(percent_cover_more_than_half_meter_overhead, 0) >= pct_thresh |
+            coalesce(percent_undercut_bank, 0)                   >= pct_thresh |
+            coalesce(percent_submerged_aquatic_veg_inchannel, 0) >= pct_thresh |
+            coalesce(percent_boulder_substrate, 0)               >= pct_thresh |
+            coalesce(percent_cobble_substrate, 0)                >= pct_thresh |
+            coalesce(surface_turbidity, 0)                       >  0
+        ),
+        species     = species_label,
+        presence    = if_else(count > 0, "Present", "Absent"),
+        month       = factor(lubridate::month(date), levels = 1:12, labels = month.abb),
+        cover_panel = if_else(any_cover, "Cover present", "Cover < 20%")
+      ) |>
+      select(depth, velocity, presence, species, month, cover_panel) |>
+      filter(presence == "Present")
+  }
+  
+  bind_rows(
+    prep_dv(mini_snorkel_chinook,   "Chinook Salmon"),
+    prep_dv(mini_snorkel_steelhead, "Steelhead")
+  ) |>
+    pivot_longer(
+      cols      = c(depth, velocity),
+      names_to  = "variable",
+      values_to = "value"
+    ) |>
+    mutate(
+      variable    = factor(variable,
+                           levels = c("depth", "velocity"),
+                           labels = c("Depth (cm)", "Velocity (m/s)")),
+      species     = factor(species,     levels = c("Chinook Salmon", "Steelhead")),
+      cover_panel = factor(cover_panel, levels = c("Cover < 20%", "Cover present"))
+    ) |>
+    ggplot(aes(x = month, y = value)) +
+    geom_violin(fill = "#2166ac", color = NA, alpha = 0.6, scale = "width") +
+    geom_boxplot(width = 0.12, outlier.shape = NA, color = "grey30", fill = "white", alpha = 0.8) +
+    facet_grid(variable ~ species + cover_panel, scales = "free_y") +
+    labs(x = "Month", y = NULL) +
+    theme_hsi() +
+    theme(
+      legend.position = "none",
+      axis.text.x     = element_text(size = 9)
+    )
+}
+
+plot_depth_velocity(mini_snorkel_chinook, mini_snorkel_steelhead)
+
+# Figure 3: Depth and velocity by fish presence and cover, species side by side
+ggsave(
+  here("figures", "depth_velocity_cover.png"),
+  plot_depth_velocity(mini_snorkel_chinook, mini_snorkel_steelhead),
+  width = 14, height = 8, dpi = 300, bg = "white"
+)
+
+# Figure 4: Depth × velocity scatter — shape = species/presence, color = week of year, facet = cover
+ggsave(
+  here("figures", "depth_velocity_scatter.png"),
+  plot_depth_velocity_scatter(mini_snorkel_chinook, mini_snorkel_steelhead),
+  width = 12, height = 6, dpi = 300, bg = "white"
 )
