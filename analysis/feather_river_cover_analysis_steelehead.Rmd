@@ -222,7 +222,12 @@ redd_data_with_redds |>
 redd_data_by_location <- redd_data_with_redds |> 
   rename(date_redd = date) |> 
   filter(!is.na(lat)) |> 
-  sf::st_as_sf(coords = c("long", "lat"), crs = 4326)
+  sf::st_as_sf(coords = c("long", "lat"), crs = 4326) 
+
+# steelhead_raw_redds <- redd_data_by_location |> 
+#   group_by(location) |> 
+#   summarise(total_redds = sum(number_redds, na.rm = T)) |> 
+#   saveRDS(here::here("visualizations", "raw_redd_location_steelhead.rds"))
 
 leaflet() |> 
   addProviderTiles(providers$Esri.WorldImagery, group = "Aerial Imagery") |>
@@ -1030,12 +1035,13 @@ cover_vars <- c(
   "undercut_bank",
   "aquatic_veg",
   "boulder_substrate",
-  "cobble_substrate"
+  "cobble_substrate",
+  "surface_turbidity"
 )
 
 site_var <- "channel_location"  
 
-df_long <- log_reg_data  |> 
+df_long <- log_reg_data |>
   mutate(presence = as.integer(count > 0))  |> 
   select(all_of(site_var), presence, all_of(cover_vars)) |> 
   mutate(across(all_of(cover_vars), ~ as.integer(.x > 0))) |> 
@@ -1075,14 +1081,127 @@ plot_df <- feature_summary |>
   )
 
 ggplot(plot_df, aes(x = feature, y = value)) +
-  geom_col(fill = "darkgreen", alpha = 0.6) +
+  geom_col(fill = "black", alpha = 0.8) +
   facet_grid(panel ~ .data[[site_var]], scales = "free_y") +
-  labs(x = NULL, y = "Value (0–1)", title = "Steelhead - Habitat feature availability, use, and preference by channel location") +
-  theme_minimal(base_size = 12) +
+  labs(
+    x = NULL,
+    y = "Value (0–1)",
+    title = "Steelhead - Habitat feature availability, use, and preference by channel location"
+  ) +
+  theme_classic(base_size = 12) +
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    strip.text.x = element_text(size = 9)
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
+    strip.background = element_rect(fill = "white", color = "black", linewidth = 0.5),
+    strip.text = element_text(size = 9),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5),
+    axis.line = element_blank(),
+    plot.title = element_text(size = 12)
   )
+
+ggsave(
+  filename = here::here("figures", "steelhead_hsi_lfc_hfc.png"),
+  width = 12,
+  height = 9,
+  dpi = 300,
+  bg = "white"
+)
+```
+
+
+```{r}
+cover_vars <- c(
+  "small_woody",
+  "large_woody",
+  "overhanging_veg",
+  "undercut_bank",
+  "aquatic_veg",
+  "boulder_substrate",
+  "cobble_substrate",
+  "surface_turbidity"
+)
+
+site_var <- "location"  
+
+df_long <- log_reg_data |>
+  mutate(presence = as.integer(count > 0))  |> 
+  select(all_of(site_var), presence, all_of(cover_vars)) |> 
+  mutate(across(all_of(cover_vars), ~ as.integer(.x > 0))) |> 
+  pivot_longer(
+    cols = all_of(cover_vars),
+    names_to = "feature",
+    values_to = "feature_present"
+  )
+
+feature_summary <- df_long |> 
+  group_by(.data[[site_var]], feature) |> 
+  summarise(
+    n_all = n(),
+    n_present_feature = sum(feature_present == 1, na.rm = TRUE),
+    n_fish_present = sum(presence == 1, na.rm = TRUE),
+    n_fish_present_with_feature = sum(presence == 1 & feature_present == 1, na.rm = TRUE),
+    .groups = "drop"
+  ) |> 
+  group_by(.data[[site_var]]) |> 
+  mutate(
+    HA = n_present_feature / n_all,
+    HU = ifelse(n_fish_present > 0, n_fish_present_with_feature / n_fish_present, NA_real_),
+    P  = HU / HA,
+    HSI_raw = ifelse(is.finite(P), P / max(P, na.rm = TRUE), NA_real_)
+  ) |> 
+  ungroup()
+
+plot_df <- feature_summary |> 
+  select(.data[[site_var]], feature, HA, HU, HSI_raw) |> 
+  pivot_longer(cols = c(HA, HU, HSI_raw), names_to = "panel", values_to = "value") |> 
+  mutate(
+    panel = recode(panel,
+                   HA = "HA (availability)",
+                   HU = "HU (utilization)",
+                   HSI_raw = "HSI (preference)"),
+    feature = str_replace_all(feature, "_", " ")
+  )
+
+ggplot(plot_df, aes(x = value, y = feature, color = feature)) +
+  geom_jitter(height = 0.2, alpha = 0.5, size = 1.8) +
+  stat_summary(fun = mean, geom = "point", shape = 18, size = 4, color = "black") +
+  facet_wrap(~panel, ncol = 1) +
+  scale_color_manual(
+    values = c(
+      "aquatic veg"        = "black",
+      "boulder substrate"  = "black",
+      "cobble substrate"   = "black",
+      "fine substrate"     = "black",
+      "gravel substrate"   = "black",
+      "large wood"         = "black",
+      "pool"               = "black",
+      "riffle"             = "black",
+      "run"                = "black"
+    ),
+    guide = "none"
+  ) +
+  labs(
+    x = "Value (0–1)",
+    y = NULL,
+    title = "Steelhead habitat: habitat variability across locations",
+    subtitle = "Points = locations; diamond = mean"
+  ) +
+  theme_classic(base_size = 12) +
+  theme(
+    strip.background = element_rect(fill = "white", color = "black", linewidth = 0.5),
+    strip.text = element_text(size = 10),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5),
+    axis.line = element_blank(),
+    plot.title = element_text(size = 12),
+    plot.subtitle = element_text(size = 10, color = "grey40")
+  )
+
+ggsave(
+  filename = here::here("figures", "steelhead_hsi_locations.png"),
+  width = 12,
+  height = 9,
+  dpi = 300,
+  bg = "white"
+)
 
 ```
 

@@ -1,0 +1,525 @@
+---
+title: "Feather River - Mini Snorkel Cover Analysis"
+output: 
+  flexdashboard::flex_dashboard:
+    theme: readable
+  font_family: "Roboto"
+  google_fonts: true
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+library(tidyverse)
+library(leaflet)
+library(sf)
+
+colors_full <-  c("#9A8822", "#F5CDB4", "#F8AFA8", "#FDDDA0", "#74A089", #Royal 2
+                  "#899DA4", "#C93312", "#DC863B", # royal 1 (- 3)
+                  "#F1BB7B", "#FD6467", "#5B1A18", "#D67236",# Grand Budapest 1 (-4)
+                  "#D8B70A", "#02401B", "#A2A475", # Cavalcanti 1
+                  "#E6A0C4", "#C6CDF7", "#D8A499", "#7294D4", #Grand Budapest 2
+                  "#9986A5", "#EAD3BF", "#AA9486", "#B6854D", "#798E87", # Isle of dogs 2 altered slightly
+                  "#F3DF6C", "#CEAB07", "#D5D5D3", "#24281A", # Moonriese 1, 
+                  "#798E87", "#C27D38", "#CCC591", "#29211F", # moonrise 2
+                  "#85D4E3", "#F4B5BD", "#9C964A", "#CDC08C", "#FAD77B" ) # moonrise 3 
+
+fish_pres_cols <- c('Yes' = "#9A8822", 'No' = "#899DA4")
+
+colfunc <- colorRampPalette(c("#02401B", "white"))
+gradient <- colfunc(100)
+
+```
+
+```{r}
+mini_locations_raw <- read_csv("mini_locations_raw.csv")
+mini_fish_raw <- read_csv("mini_fish_raw.csv")
+# orders locations from upstream to downstream. 
+# TODO we are missing coordinates for some locations
+location_order <- tibble(location = c("hatchery ditch", "hour bars", "hatchery riffle", "trailer park",
+                                      "bedrock riffle", "steep riffle", "robinson riffle", "upper big hole",
+                                      "lower big hole", "g95", "gridley riffle", "big bar", "goose riffle",
+                                      "macfarland riffle", "shallow riffle", "herringer riffle", "junkyard riffle",
+                                      "auditorium riffle", "eye side channel", "matthews riffle", "eye riffle",
+                                      "lower hour", "aleck riffle", "weir riffle", "vance avenue",
+                                      "big hole", "hour riffle", "cox riffle", "gateway riffle"),
+                         order = c(2,19,1,5,
+                                   4,9,8,15,
+                                   16,17,23,21,20,
+                                   22,25,26,24,
+                                   3,11,6,12,
+                                   18,7,10,13,
+                                   14,17,25,13))
+
+steelhead_redds <- read_rds("steelhead_redd_summary.rds") |>
+  mutate(species = "steelhead trout")
+chinook_redds <- read_rds("chinook_redd_summary.rds") |>
+  mutate(species = "chinook salmon")
+
+all_redds <- bind_rows(steelhead_redds, chinook_redds)
+
+raw_steelhead_redds <- read_rds("raw_redd_location_steelhead.rds") |>
+  mutate(species = "steelhead trout") |>
+   sf::st_cast("POINT")
+
+raw_chinook_redds <- read_rds("raw_redd_location_chinook.rds") |> 
+  mutate(species = "chinook salmon") |> 
+   sf::st_cast("POINT")
+
+feather_cover <- mini_fish_raw |> 
+  left_join(mini_locations_raw |> 
+              distinct(location_table_id, date, channel_location, location)) |> 
+  # create cover variables that are more consistent with strategic plan categories
+  mutate(small_woody_debris = percent_small_woody_cover_inchannel,
+         large_woody_debris = percent_large_woody_cover_inchannel,
+         boulder = percent_boulder_substrate,
+         cobble = percent_cobble_substrate, 
+         undercut_bank = percent_undercut_bank, 
+         aquatic_veg = percent_submerged_aquatic_veg_inchannel, 
+         overhanging_veg = percent_cover_half_meter_overhead + percent_cover_more_than_half_meter_overhead) |> 
+  select(micro_hab_data_tbl_id, location_table_id, transect_code, location,
+         small_woody_debris:overhanging_veg, count, date, depth, velocity, species) |>
+  mutate(species = ifelse(species %in% c("steelhead trout (wild)", "steelhead trout, (clipped)"), "steelhead trout", species)) |> 
+  left_join(all_redds, by = c("location", "species"))  |> 
+  pivot_longer(cols = c(small_woody_debris, boulder, cobble, undercut_bank, aquatic_veg, overhanging_veg, depth, velocity, redd_presence, redd_total), names_to = "cover_type", 
+               values_to = "percent_cover") |>  
+  distinct() |> 
+  left_join(location_order) |> 
+  mutate(fish_presence = ifelse(count > 0, "Yes", "No")) |> 
+  mutate(location_table_id = paste0(date, " (location id: ", location_table_id, ")")) |> 
+  filter(species %in% c("chinook salmon" , "steelhead trout") | count == 0) 
+
+safe_mean <- function(x) if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE)
+safe_median <- function(x) if (all(is.na(x))) NA_real_ else median(x, na.rm = TRUE)
+safe_min <- function(x) if (all(is.na(x))) NA_real_ else min(x, na.rm = TRUE)
+safe_max <- function(x) if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
+
+summary_cover <- feather_cover |> 
+  mutate(month = lubridate::month(date, label = TRUE)) |> 
+  group_by(location, cover_type, order, fish_presence, month, species) |> 
+  summarize(
+    mean_percent_cover = if (first(cover_type) %in% c("redd_presence", "redd_total")) {
+      safe_max(percent_cover)
+    } else {
+      safe_mean(percent_cover)
+    },
+    median_percent_cover = if (first(cover_type) %in% c("redd_presence", "redd_total")) {
+      safe_max(percent_cover)
+    } else {
+      safe_median(percent_cover)
+    },
+    min_percent_cover = safe_min(percent_cover),
+    max_percent_cover = safe_max(percent_cover),
+    .groups = "drop"
+  ) |> 
+  mutate(
+    mean_percent_cover = ifelse(is.na(mean_percent_cover), 0, mean_percent_cover),
+    median_percent_cover = ifelse(is.na(median_percent_cover), 0, median_percent_cover),
+    min_percent_cover = ifelse(is.infinite(min_percent_cover) | is.na(min_percent_cover), 0, min_percent_cover),
+    max_percent_cover = ifelse(is.infinite(max_percent_cover) | is.na(max_percent_cover), 0, max_percent_cover)
+  )
+
+location_summary <- feather_cover |> 
+  group_by(location, cover_type, species) |> 
+  summarize(mean_percent_cover = mean(percent_cover, na.rm = T)) |> 
+  mutate(mean_percent_cover = ifelse(is.na(mean_percent_cover), 0, mean_percent_cover))
+
+locations_sf <- mini_locations_raw |>
+  distinct(location_table_id, date, channel_location, .keep_all = TRUE) |>
+  na.omit() |>
+  st_as_sf(coords = c('longitude', 'latitude'), crs = 4326) |> 
+  group_by(location) |>
+  slice_max(geometry) |>
+  distinct() |> 
+  select(location) |> 
+  left_join(location_summary)
+
+
+```
+
+```{r}
+imp_steelhead_pred <- c('overhanging_veg', 'aquatic_veg', 'small_woody_debris', 'depth', 'velocity')
+
+imp_chinook_pred <- c("overhanging_veg", "depth", "velocity")
+```
+
+# About the Tool 
+
+#### About the Tool 
+
+The purpose of this tool is to show the spatial and temporal variability in cover within the Feather River system using [2001 and 2002 mini snorkel data](https://portal.edirepository.org/nis/metadataviewer?packageid=edi.1705.3). For both species, only important predictors are available to view, based on logistic regression results from a prior analysis — overhanging vegetation, aquatic vegetation, small woody debris, depth, and velocity for steelhead trout, and overhanging vegetation, depth, and velocity for Chinook salmon. The tool is designed to help users understand how the reach-level distribution of these important habitat variables relates to known spawning locations: redd presence and total redd counts are included as overlay options so that areas of high spawning activity can be compared directly against locations where key habitat conditions are most favorable. This allows users to evaluate spatial alignment (or misalignment) between habitat quality — as identified by the logistic regressions — and actual spawning use across the Feather River.
+
+# View Analysis Inputs {#view-data data-orientation="rows"}
+
+## Row {data-height="25"}
+
+```{r}
+tags$div(
+  tags$strong("Cover associated with: "),
+  tags$span(
+    class = "help-icon", 
+    shiny::icon("question-circle"), 
+    style = "cursor: pointer; color: #007BFF; margin-left: 5px;",
+    onclick = "document.getElementById('instructions_modal').style.display='block'; 
+               document.getElementById('modal_overlay').style.display='block';"
+  ),
+  radioButtons(
+    inputId = "which_fish", 
+    label = NULL, 
+    choices = c("Steelhead", "Chinook"), 
+    selected = "Steelhead"
+  )
+)
+
+# Hidden modal for instructions
+tags$div(
+  id = "modal_overlay",
+  style = "display:none; position:fixed; top:0; left:0; width:100%; height:100%; background-color:rgba(0, 0, 0, 0.5); z-index:999;",
+  onclick = "document.getElementById('instructions_modal').style.display='none'; 
+             document.getElementById('modal_overlay').style.display='none';"
+)
+
+tags$div(
+  id = "instructions_modal",
+  style = "display:none; position:fixed; z-index:1000; left:50%; top:50%; transform:translate(-50%, -50%); background-color:white; padding:20px; border:1px solid #ccc; box-shadow:0px 4px 8px rgba(0,0,0,0.2);",
+  tags$div(
+    style = "text-align:right;",
+    tags$button("Close", 
+                onclick = "document.getElementById('instructions_modal').style.display='none'; 
+                           document.getElementById('modal_overlay').style.display='none';", 
+                style = "background:none; border:none; color:#007BFF; font-weight:bold; cursor:pointer;")
+  ),
+  tags$h4("Instructions"),
+  tags$p("Attribute Filter - Select a monitoring location by name on the drop down. This will populate which transects were monitored at that monitoring location. Each transect is associated with a specific monitoring date and ID. Once selected, a heat map of percent cover along the transect will be visible. If a fish was present during monitoring, it will be highlighted with a red outline.")
+)
+
+
+```
+
+```{r}
+div(
+  style = "display: flex; align-items: flex-start; gap: 10px;",
+  
+  selectInput(
+    "location_filter",
+    label = tags$strong("Filter by Location:"),
+    choices = c("all locations", unique(locations_sf$location)),
+    selected = "all locations"
+  ),
+  
+  selectInput(
+    "predictor_id",
+    label = tags$strong("Choose Predictor:"),
+    choices = imp_steelhead_pred,
+    selected = "aquatic_veg"
+  )
+)
+
+observeEvent(input$which_fish, {
+  predictor_choices <- if (input$which_fish == "Steelhead") {
+    imp_steelhead_pred
+  } else {
+    imp_chinook_pred
+  }
+  
+  selected_val <- if (!is.null(input$predictor_id) &&
+                      input$predictor_id %in% predictor_choices) {
+    input$predictor_id
+  } else {
+    "aquatic_veg"
+  }
+  
+  updateSelectInput(
+    session,
+    "predictor_id",
+    choices = predictor_choices,
+    selected = selected_val
+  )
+})
+```
+
+## Row
+
+### Habitat Map
+
+```{r}
+output$map <- renderLeaflet({
+  
+  req(input$predictor_id, input$which_fish, input$location_filter)
+  
+  species_filter <- if (input$which_fish == "Steelhead") {
+    "steelhead trout"
+  } else {
+    "chinook salmon"
+  }
+  
+  map_data <- locations_sf |>
+    filter(
+      cover_type == input$predictor_id,
+      if (input$predictor_id %in% c("redd_total", "redd_presence")) {
+        species %in% species_filter
+      } else {
+        (species %in% species_filter) 
+      }
+    )
+  
+  print(map_data |> head())
+  
+  predictor_label <- switch(input$predictor_id,
+    depth    = "Depth (m)",
+    velocity = "Velocity (ft/s)",
+    aquatic_veg = "Aquatic Veg (%)",
+    overhanging_veg = "Overhanging Veg (%)",
+    small_woody_debris = "Small Woody Debris (%)"
+  )
+
+  # unit_suffix <- switch(input$predictor_id,
+  #   depth    = " meters",
+  #   velocity = " ft/s",
+  #   ""
+  # )
+
+  pal <- colorBin("YlOrRd", domain = map_data$mean_percent_cover, bins = 5, pretty = FALSE)
+
+  radius_vals <- if (input$predictor_id == "redd_total") {
+    scales::rescale(sqrt(map_data$mean_percent_cover), to = c(4, 20))
+  } else {
+    scales::rescale(map_data$mean_percent_cover, to = c(3, 20))
+  }
+  
+  leaflet(map_data) |>
+    addProviderTiles(providers$Esri.WorldImagery, group = "Aerial Imagery") |>
+    addProviderTiles(providers$OpenStreetMap, group = "Street Map") |>
+    addCircleMarkers(
+      layerId = ~location,
+      color = ~pal(mean_percent_cover),
+      fillColor = ~pal(mean_percent_cover),
+      radius = radius_vals,
+      fill = TRUE,
+      fillOpacity = 0.9,
+      weight = 1,
+      opacity = 0.8,
+      label = ~location,
+      labelOptions = labelOptions(
+        style = list("font-weight" = "bold", padding = "3px 8px"),
+        textsize = "10px",
+        direction = "auto",
+        noHide = FALSE
+      ),
+      popup = ~paste0(
+        "<b>Location:</b> ", location, "<br>",
+        "<b>", predictor_label, ":</b> ", round(mean_percent_cover, 2)
+      )
+    ) |>
+    addCircleMarkers(
+      data = raw_steelhead_redds,
+      color = "#2C7FB8",
+      fillColor = "#2C7FB8",
+      radius = ~scales::rescale(sqrt(total_redds), to = c(3, 15)),
+      weight = 1,
+      fillOpacity = 0.8,
+      opacity = 0.9,
+      popup = ~paste0(
+        "<b>Location:</b> ", location, "<br>",
+        "<b>Total redds:</b> ", total_redds
+      ),
+      group = "raw steelhead redd locations"
+    ) |>
+    addCircleMarkers(
+      data = raw_chinook_redds,
+      color = "#D95F0E",
+      fillColor = "#D95F0E",
+      radius = ~scales::rescale(sqrt(total_redds), to = c(3, 15)),
+      weight = 1,
+      fillOpacity = 0.8,
+      opacity = 0.9,
+      popup = ~paste0(
+        "<b>Location:</b> ", location, "<br>",
+        "<b>Total redds:</b> ", total_redds
+      ),
+      group = "raw chinook redd locations"
+    ) |>
+    addLayersControl(
+      baseGroups = c("Aerial Imagery", "Street Map"),
+      overlayGroups = c(
+        "raw steelhead redd locations",
+        "raw chinook redd locations"
+      ),
+      position = "topright",
+      options = layersControlOptions(collapsed = TRUE)
+    ) |>
+    addLegend(
+      "bottomright",
+      pal = pal,
+      values = map_data$mean_percent_cover,
+      title = predictor_label
+    ) |> 
+    hideGroup("raw steelhead redd locations") |> 
+    hideGroup("raw chinook redd locations")
+})
+
+leafletOutput("map")
+
+observeEvent(input$location_filter, {
+  req(input$location_filter)
+  req(input$predictor_id)
+  req(input$which_fish)
+  
+  if (input$location_filter != "all locations") {
+    
+    selected_location <- locations_sf |>
+      ungroup() |>
+      filter(location == input$location_filter)
+    
+    req(nrow(selected_location) > 0)
+    
+    coords <- sf::st_coordinates(selected_location)
+    lng <- as.numeric(coords[1, "X"])
+    lat <- as.numeric(coords[1, "Y"])
+    
+    leafletProxy("map") |>
+      flyTo(
+        lng = lng,
+        lat = lat,
+        zoom = 16
+      ) |>
+      clearGroup("highlighted") |>
+      addCircleMarkers(
+        data = selected_location,
+        radius = 8,
+        color = "red",
+        weight = 4,
+        fill = TRUE,
+        fillOpacity = 0.25,
+        opacity = 1,
+        label = ~location,
+        labelOptions = labelOptions(
+          noHide = TRUE,
+          direction = "auto",
+          textsize = "10px",
+          style = list("font-weight" = "bold", padding = "3px 8px")
+        ),
+        group = "highlighted"
+      )
+  } else {
+    leafletProxy("map") |>
+      clearGroup("highlighted")
+  }
+})
+
+
+```
+
+### Cover Visual
+
+```{r}
+output$attribute_plot <- renderPlot({
+  if (input$location_filter != "all locations") {
+    
+    species_filter <- if (input$which_fish == "Steelhead") {
+      c("steelhead trout")
+    } else {
+      "chinook salmon"
+    }
+    
+    summary_cover_filter <- summary_cover |> 
+      filter(location == input$location_filter) |> 
+      filter(cover_type == input$predictor_id) |> 
+      filter(
+        (species %in% species_filter) | is.na(species)
+      )
+    
+    label <- if(input$predictor_id %in% c("aquatic_veg", "boulder", "cobble", "overhanging_veg", 
+                                          "small_woody_debris", "undercut_bank")) {
+      "% Cover"
+    } else if (input$predictor_id == "depth") {
+      "Depth (meters)"
+    } else if (input$predictor_id == "velocity") {
+      "Velocity (ft/s)"
+    } else if (input$predictor_id == "redd_total") {
+      "Total number of Redds"
+    } else if (input$predictor_id == "redd_presence") {
+      "Redds Nearby (0/1)"
+    }
+    
+    ggplot(summary_cover_filter,
+           aes(x = month,
+               y = mean_percent_cover,
+               color = fish_presence,
+               group = fish_presence)) +
+      geom_linerange(
+        aes(ymin = min_percent_cover,
+            ymax = max_percent_cover),
+        position = position_dodge(width = 0.5),
+        size = 2,
+        alpha = 0.4
+      ) +
+      geom_point(
+        position = position_dodge(width = 0.5),
+        size = 4
+      ) +
+      scale_color_manual(values = fish_pres_cols) +
+      theme_minimal() +
+      labs(
+        y = label,
+        x = "Month",
+        color = "Fish Presence"
+      ) +
+      theme(
+        axis.text = element_text(size = 16),
+        axis.title = element_text(size = 18, face = "bold"),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.25, "cm"),
+        legend.title = element_text(size = 18, face = "bold"),
+        legend.text = element_text(size = 16)
+      )
+    
+  } else {
+    
+    summary_cover_filter <- summary_cover |> 
+      filter(cover_type == input$predictor_id) |> 
+      filter(
+        species %in% if (input$which_fish == "Steelhead") {
+          c("steelhead trout")
+        } else {
+          "chinook salmon"
+        }
+      ) 
+    
+    label <- if(input$predictor_id %in% c("aquatic_veg", "boulder", "cobble", 
+                                          "overhanging_veg", "small_woody_debris", "undercut_bank")) {
+      "% Cover"
+    } else if (input$predictor_id == "depth") {
+      "Depth (meters)"
+    } else if (input$predictor_id == "velocity") {
+      "Velocity (ft/s)"
+    } else if (input$predictor_id == "redd_total") {
+      "Total number of Redds"
+    } else if (input$predictor_id == "redd_presence") {
+      "Redds Nearby (0/1)"
+    }
+    
+    ggplot(summary_cover_filter,
+           aes(x = month, y = reorder(location, order, decreasing = T), fill = mean_percent_cover)) +
+      geom_tile(alpha = 0.8, color = "darkgrey") +
+      scale_fill_distiller(palette = "YlOrRd", direction = 1) +
+      labs(y = "River location", x = "Month", fill = label) + 
+      theme_minimal() + 
+      theme(
+        axis.text = element_text(size = 16),
+        axis.title = element_text(size = 18, face = "bold"),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.25, "cm"),
+        legend.title = element_text(size = 18, face = "bold"),
+        legend.text = element_text(size = 16),
+        
+      ) 
+  }
+  
+  
+})
+
+```
+
+```{r}
+plotOutput("attribute_plot")
+```

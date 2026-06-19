@@ -200,6 +200,11 @@ redd_data_by_location <- redd_data |>
   filter(!is.na(longitude)) |> 
   sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
 
+# chinook_raw_redds <- redd_data_by_location |> 
+#   group_by(location) |> 
+#   summarise(total_redds = sum(number_redds, na.rm = T)) |> 
+#   saveRDS(here::here("visualizations", "raw_redd_location_chinook.rds"))
+
 # redd_data_by_location |> 
 #   ggplot(aes(x = location, y = n_redds)) +
 #   geom_col() +
@@ -341,7 +346,7 @@ snorkel dataset.
     and June are likely larger ( \> 50mm) which aligns with the fork
     length distributions by month in the habitat data
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 colors_small <-  c("#9A8822", "#F5CDB4", "#F8AFA8", "#FDDDA0", "#74A089", #Royal 2
                    "#899DA4", "#C93312", "#DC863B" # royal 1 (- 3)
 )
@@ -352,7 +357,7 @@ feather_rst_daily <- feather_rst |>
   summarize(count = sum(count))
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 
 cumulative <- feather_rst_daily |> 
   mutate(water_year = ifelse(month(date) %in% 10:12, year(date) + 1, year(date)),
@@ -423,7 +428,7 @@ percent_threshold <- 20
 # use a hurdle model (Gard 2024); 
 # pre-processing - all numeric values must be rounded to whole numbers
 model_data <- mini_snorkel_model_ready |>
-  select(count, location, channel_location, depth, velocity, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank", month, fl_mm, channel_geomorphic_unit, reach_length, reach_width, channel_type, month) |>
+  select(count, location, channel_location, depth, velocity, contains("inchannel"), contains("overhead"), "percent_cobble_substrate", "percent_boulder_substrate", "percent_undercut_bank", month, fl_mm, channel_geomorphic_unit, reach_length, surface_turbidity, reach_width, channel_type, month) |>
   # create new cover variables, based off Gard 2023
   mutate(small_woody = percent_small_woody_cover_inchannel,
          large_woody = percent_large_woody_cover_inchannel,
@@ -543,7 +548,7 @@ variables are held constant.
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 percent_threshold <- 20
 
-hurdle_model <- pscl::hurdle(count ~ small_woody + depth + velocity + large_woody + aquatic_veg + overhanging_veg + cobble_substrate + boulder_substrate + undercut_bank + redd_total + redd_presence, data = model_data, dist = "negbin") 
+hurdle_model <- pscl::hurdle(count ~ small_woody + depth + velocity + large_woody + aquatic_veg + overhanging_veg + cobble_substrate + boulder_substrate + undercut_bank + redd_total + redd_presence + surface_turbidity, data = model_data, dist = "negbin") 
 # Negative Binomial Distribution: The Negative Binomial distribution is more flexible than the Poisson distribution and is used when the variance of the counts is greater than the mean, which is known as overdispersion. The Negative Binomial model allows for the variance to be larger than the mean, which is common in count data where there is extra variability beyond what is expected from a Poisson distribution.
 
 # zero inflated models are capable of dealing with excess zero counts
@@ -679,7 +684,7 @@ A simple logistic regression to start.
 glm_presence <- glm(
   presence ~ small_woody + depth + velocity + large_woody +
     aquatic_veg + overhanging_veg + cobble_substrate +
-    boulder_substrate + undercut_bank + redd_total + redd_presence,
+    boulder_substrate + undercut_bank + redd_total + redd_presence + surface_turbidity,
   data = log_reg_data,
   family = binomial(link = "logit")
 )
@@ -741,7 +746,7 @@ Using the high flow, low flow channel as the random effect:
 glmm_presence_location <- glmmTMB(
   presence ~ small_woody + depth + velocity + large_woody +
     aquatic_veg + overhanging_veg + cobble_substrate +
-    boulder_substrate + undercut_bank + redd_total + redd_presence + 
+    boulder_substrate + undercut_bank + redd_total + redd_presence + surface_turbidity +
     (1 | location),                     
   data = log_reg_data,
   family = binomial(link = "logit")
@@ -771,7 +776,7 @@ the random effect:
 glmm_presence <- glmmTMB(
   presence ~ small_woody + depth + velocity + large_woody +
     aquatic_veg + overhanging_veg + cobble_substrate +
-    boulder_substrate + undercut_bank + redd_total + redd_presence + 
+    boulder_substrate + undercut_bank + redd_total + redd_presence + surface_turbidity +
     (1 | channel_location/location),                     
   data = log_reg_data,
   family = binomial(link = "logit")
@@ -815,7 +820,7 @@ Including month as a random effect substantially improved model performance, inc
 glmm_presence_location_month <- glmmTMB(
   presence ~ small_woody + depth + velocity + large_woody +
     aquatic_veg + overhanging_veg + cobble_substrate +
-    boulder_substrate + undercut_bank + redd_total + redd_presence + 
+    boulder_substrate + undercut_bank + redd_total + redd_presence + surface_turbidity + 
     (1 | location) + (1 | month),                     
   data = log_reg_data,
   family = binomial(link = "logit")
@@ -950,7 +955,8 @@ effects_df <- broom::tidy(glmm_presence_location_month, conf.int = TRUE) |>
                   depth = "Depth*",
                   velocity = "Velocity*",
                   redd_total = "Total Number or Redds*",
-                  redd_presence = "Redds Nearby"
+                  redd_presence = "Redds Nearby",
+                  surface_turbidity = "Surface Turbidity"
     )
   )
 
@@ -1007,7 +1013,8 @@ cover_vars <- c(
   "undercut_bank",
   "aquatic_veg",
   "boulder_substrate",
-  "cobble_substrate"
+  "cobble_substrate",
+  "surface_turbidity"
 )
 
 site_var <- "channel_location"  
@@ -1052,14 +1059,128 @@ plot_df <- feature_summary |>
   )
 
 ggplot(plot_df, aes(x = feature, y = value)) +
-  geom_col(fill = "darkblue", alpha = 0.6) +
+  geom_col(fill = "black", alpha = 0.8) +
   facet_grid(panel ~ .data[[site_var]], scales = "free_y") +
-  labs(x = NULL, y = "Value (0–1)", title = "Chinook - Habitat feature availability, use, and preference by channel location") +
-  theme_minimal(base_size = 12) +
+  labs(
+    x = NULL,
+    y = "Value (0–1)",
+    title = "Chinook - Habitat feature availability, use, and preference by channel location"
+  ) +
+  theme_classic(base_size = 12) +
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    strip.text.x = element_text(size = 9)
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
+    strip.background = element_rect(fill = "white", color = "black", linewidth = 0.5),
+    strip.text = element_text(size = 9),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5),
+    axis.line = element_blank(),
+    plot.title = element_text(size = 12)
   )
+
+ggsave(
+  filename = here::here("figures", "chinook_hsi_lfc_hfc.png"),
+  width = 12,
+  height = 9,
+  dpi = 300,
+  bg = "white"
+)
+```
+
+
+```{r}
+cover_vars <- c(
+  "small_woody",
+  "large_woody",
+  "overhanging_veg",
+  "undercut_bank",
+  "aquatic_veg",
+  "boulder_substrate",
+  "cobble_substrate",
+  "surface_turbidity"
+)
+
+site_var <- "location"  
+
+df_long <- log_reg_data |>
+  mutate(presence = as.integer(count > 0))  |> 
+  select(all_of(site_var), presence, all_of(cover_vars)) |> 
+  mutate(across(all_of(cover_vars), ~ as.integer(.x > 0))) |> 
+  pivot_longer(
+    cols = all_of(cover_vars),
+    names_to = "feature",
+    values_to = "feature_present"
+  )
+
+feature_summary <- df_long |> 
+  group_by(.data[[site_var]], feature) |> 
+  summarise(
+    n_all = n(),
+    n_present_feature = sum(feature_present == 1, na.rm = TRUE),
+    n_fish_present = sum(presence == 1, na.rm = TRUE),
+    n_fish_present_with_feature = sum(presence == 1 & feature_present == 1, na.rm = TRUE),
+    .groups = "drop"
+  ) |> 
+  group_by(.data[[site_var]]) |> 
+  mutate(
+    HA = n_present_feature / n_all,
+    HU = ifelse(n_fish_present > 0, n_fish_present_with_feature / n_fish_present, NA_real_),
+    P  = HU / HA,
+    HSI_raw = ifelse(is.finite(P), P / max(P, na.rm = TRUE), NA_real_)
+  ) |> 
+  ungroup()
+
+plot_df <- feature_summary |> 
+  select(.data[[site_var]], feature, HA, HU, HSI_raw) |> 
+  pivot_longer(cols = c(HA, HU, HSI_raw), names_to = "panel", values_to = "value") |> 
+  mutate(
+    panel = recode(panel,
+                   HA = "HA (availability)",
+                   HU = "HU (utilization)",
+                   HSI_raw = "HSI (preference)"),
+    feature = str_replace_all(feature, "_", " ")
+  )
+
+ggplot(plot_df, aes(x = value, y = feature)) + # color = feature) +
+  geom_boxplot() + 
+  #geom_jitter(height = 0.2, alpha = 0.5, size = 1.8) +
+  #stat_summary(fun = mean, geom = "point", shape = 18, size = 4, color = "black") +
+  facet_wrap(~panel, ncol = 1) +
+  scale_color_manual(
+    values = c(
+      "aquatic veg"        = "black",
+      "boulder substrate"  = "black",
+      "cobble substrate"   = "black",
+      "fine substrate"     = "black",
+      "gravel substrate"   = "black",
+      "large wood"         = "black",
+      "pool"               = "black",
+      "riffle"             = "black",
+      "run"                = "black"
+    ),
+    guide = "none"
+  ) +
+  labs(
+    x = "Value (0–1)",
+    y = NULL,
+    title = "Chinook habitat: habitat variability across locations"
+    #subtitle = "Points = locations; diamond = mean"
+  ) +
+  theme_classic(base_size = 12) +
+  theme(
+    strip.background = element_rect(fill = "white", color = "black", linewidth = 0.5),
+    strip.text = element_text(size = 10),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5),
+    axis.line = element_blank(),
+    plot.title = element_text(size = 12),
+    plot.subtitle = element_text(size = 10, color = "grey40")
+  )
+
+ggsave(
+  filename = here::here("figures", "chinook_hsi_locations_boxplot.png"),
+  width = 12,
+  height = 9,
+  dpi = 300,
+  bg = "white"
+)
 
 ```
 

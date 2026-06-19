@@ -1,0 +1,12 @@
+name: mini-snorkel-cover-analysis-dashboard
+title:
+username: flowwest
+account: flowwest
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 17047124
+bundleId: 11797348
+url: https://flowwest.shinyapps.io/mini-snorkel-cover-analysis-dashboard/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
